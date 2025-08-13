@@ -59,8 +59,7 @@ export default function AuthForm() {
         options: {
           data: {
             full_name: form.name,
-            role: form.role,
-            farm_name: form.role === 'seller' ? form.farmName : null
+            role: form.role
           }
         }
       })
@@ -68,20 +67,39 @@ export default function AuthForm() {
       if (error) {
         setErrorMsg(error.message)
       } else {
-        // The database trigger will automatically create the profile
-        // We just need to update the seller profile if it's a seller
+        // For sellers, we need to create both the base profile and seller profile
         if (form.role === 'seller' && data.user) {
-          const { error: profileError } = await supabase
-            .from('seller_profiles')
-            .update({
-              farm_name: form.farmName,
-              bio: form.bio,
-              years_farming: parseInt(form.yearsFarming) || 0
-            })
-            .eq('id', data.user.id)
+          try {
+            // First, upsert the base profile with phone and location
+            const { error: baseProfileError } = await supabase
+              .from('profiles')
+              .upsert({
+                id: data.user.id,
+                email: form.email,
+                full_name: form.name,
+                phone: form.phone,
+                address: form.location
+              })
 
-          if (profileError) {
-            console.error('Profile update error:', profileError)
+            if (baseProfileError) {
+              console.error('Base profile upsert error:', baseProfileError)
+            }
+
+            // Then, upsert the seller profile
+            const { error: sellerProfileError } = await supabase
+              .from('seller_profiles')
+              .upsert({
+                id: data.user.id,
+                farm_name: form.farmName,
+                bio: form.bio,
+                years_farming: parseInt(form.yearsFarming) || 0
+              })
+
+            if (sellerProfileError) {
+              console.error('Seller profile error:', sellerProfileError)
+            }
+          } catch (profileError) {
+            console.error('Profile creation error:', profileError)
           }
         }
 
