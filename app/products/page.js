@@ -1,74 +1,171 @@
-import Link from 'next/link'
-import Image from 'next/image'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
-export const revalidate = 60 // ISR - refresh every 60s
+export default function Products() {
+  const router = useRouter()
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
 
-export default async function ProductsPage() {
-  // Fetch all approved products with seller_id from Supabase
-  const { data: products, error } = await supabase
-    .from('products')
-    .select(`
-      id,
-      name,
-      description,
-      price,
-      images,
-      seller_id
-    `)
-    .eq('status', 'approved')
-    .order('created_at', { ascending: false })
+  useEffect(() => {
+    loadProducts()
+  }, [])
 
-  if (error) {
-    console.error('Error fetching products:', error.message)
-    throw new Error(error.message)
+  const loadProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          profiles!products_seller_id_fkey (
+            full_name,
+            avatar_url
+          ),
+          seller_profiles!products_seller_id_fkey (
+            farm_name,
+            bio
+          ),
+          categories (
+            name
+          )
+        `)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setProducts(data || [])
+    } catch (error) {
+      console.error('Error loading products:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         product.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCategory = selectedCategory === 'all' || 
+                           product.categories?.name?.toLowerCase() === selectedCategory.toLowerCase()
+    return matchesSearch && matchesCategory
+  })
+
+  const categories = ['all', ...Array.from(new Set(products.map(p => p.categories?.name).filter(Boolean)))]
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
+      </div>
+    )
   }
 
   return (
-    <main className="max-w-6xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">All Products</h1>
-
-      {/* No products available */}
-      {(!products || products.length === 0) && (
-        <p className="text-gray-500">No products available at the moment.</p>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {products?.map((product) => (
-          <div
-            key={product.id}
-            className="border rounded-lg p-4 shadow hover:shadow-lg transition"
-          >
-            {/* Product Image */}
-            {product.images?.length > 0 && (
-              <Image
-                src={product.images[0]}
-                alt={product.name}
-                width={300}
-                height={200}
-                className="rounded-md object-cover"
-              />
-            )}
-
-            {/* Product name and description */}
-            <h2 className="text-xl font-bold mt-3">{product.name}</h2>
-            <p className="mt-1 text-gray-700">{product.description}</p>
-
-            {/* Price */}
-            <p className="mt-2 font-semibold text-green-700">
-              ${product.price.toFixed(2)}
-            </p>
-
-            {/* 🔗 Seller profile link */}
-            <Link
-              href={`/seller/${product.seller_id}`}
-              className="text-green-700 hover:underline block mt-2"
-            >
-              View Seller Profile
-            </Link>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <h1 className="text-2xl font-bold text-gray-900">Fresh Products</h1>
+            <div className="space-x-3">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => router.push('/auth')}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+              >
+                Sign In
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
-    </main>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search and Filters */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Search Products</label>
+              <input
+                type="text"
+                placeholder="Search by name or description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                {categories.map(category => (
+                  <option key={category} value={category}>
+                    {category === 'all' ? 'All Categories' : category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Products Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredProducts.map((product) => (
+            <div
+              key={product.id}
+              className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => router.push(`/products/${product.id}`)}
+            >
+              <div className="aspect-square bg-gray-100 rounded-t-lg flex items-center justify-center">
+                {product.images && product.images.length > 0 ? (
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    className="w-full h-full object-cover rounded-t-lg"
+                  />
+                ) : (
+                  <div className="text-4xl">🥬</div>
+                )}
+              </div>
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
+                <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-lg font-bold text-green-600">₹{product.price}/{product.unit}</span>
+                  <span className="text-sm text-gray-500">{product.quantity_available} available</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs text-green-600">
+                      {product.profiles?.full_name?.[0]?.toUpperCase() || 'F'}
+                    </span>
+                  </div>
+                  <span className="text-sm text-gray-600">{product.seller_profiles?.farm_name || 'Local Farm'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {filteredProducts.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">🥬</div>
+            <p className="text-gray-600">No products found</p>
+            <p className="text-sm text-gray-500">Try adjusting your search or filters</p>
+          </div>
+        )}
+      </main>
+    </div>
   )
 }

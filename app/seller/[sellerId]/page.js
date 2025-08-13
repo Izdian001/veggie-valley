@@ -1,171 +1,220 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import Image from 'next/image'
-import Link from 'next/link'
-import { notFound } from 'next/navigation'
 
-export const revalidate = 60 // Regenerate page every 60 sec
+export default function SellerStore() {
+  const router = useRouter()
+  const params = useParams()
+  const [seller, setSeller] = useState(null)
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
 
-function averageRating(reviews) {
-  if (!reviews || reviews.length === 0) return 0
-  const total = reviews.reduce((sum, r) => sum + r.rating, 0)
-  return (total / reviews.length).toFixed(1)
-}
+  useEffect(() => {
+    if (params.sellerId) {
+      loadSellerData()
+    }
+  }, [params.sellerId])
 
-function RatingStars({ rating }) {
-  const fullStars = Math.floor(rating)
-  const halfStar = rating - fullStars >= 0.5
-  const emptyStars = 5 - fullStars - (halfStar ? 1 : 0)
+  const loadSellerData = async () => {
+    try {
+      // Load seller profile
+      const { data: sellerData, error: sellerError } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          seller_profiles (
+            farm_name,
+            bio,
+            years_farming,
+            cover_image_url,
+            rating,
+            total_reviews
+          )
+        `)
+        .eq('id', params.sellerId)
+        .eq('role', 'seller')
+        .single()
 
-  return (
-    <div className="flex items-center text-yellow-400">
-      {[...Array(fullStars)].map((_, i) => <StarIcon key={`full_${i}`} />)}
-      {halfStar && <HalfStarIcon />}
-      {[...Array(emptyStars)].map((_, i) => <StarIcon key={`empty_${i}`} empty />)}
-      <span className="ml-2 text-gray-700 text-sm">{rating} / 5</span>
-    </div>
-  )
-}
+      if (sellerError) throw sellerError
 
-function StarIcon({ empty }) {
-  return (
-    <svg className={`w-5 h-5 ${empty ? 'text-gray-300' : 'text-yellow-400'}`} fill="currentColor" viewBox="0 0 20 20">
-      <path d="M9.049 2.927c.3-.9 1.6-.9 1.9 0l1.286 3.897 4.084.374c.807.074 1.133 1.07.516 1.607l-3.042 2.815 1.058 3.93c.224.833-.657 1.513-1.376 1.07L10 13.347l-3.477 2.374c-.72.44-1.6-.236-1.377-1.07l1.057-3.93-3.042-2.815c-.616-.537-.29-1.533.516-1.607l4.083-.374 1.287-3.897z" />
-    </svg>
-  )
-}
+      // Load seller's products
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select(`
+          *,
+          categories (
+            name
+          )
+        `)
+        .eq('seller_id', params.sellerId)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
 
-function HalfStarIcon() {
-  return (
-    <svg className="w-5 h-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-      <defs>
-        <linearGradient id="halfGrad">
-          <stop offset="50%" stopColor="currentColor" />
-          <stop offset="50%" stopColor="transparent" />
-        </linearGradient>
-      </defs>
-      <path
-        fill="url(#halfGrad)"
-        d="M9.049 2.927c.3-.9 1.6-.9 1.9 0l1.286 3.897 4.084.374c.807.074 1.133 1.07.516 1.607l-3.042 2.815 1.058 3.93c.224.833-.657 1.513-1.376 1.07L10 13.347l-3.477 2.374c-.72.44-1.6-.236-1.377-1.07l1.057-3.93-3.042-2.815c-.616-.537-.29-1.533.516-1.607l4.083-.374 1.287-3.897z"
-      />
-    </svg>
-  )
-}
+      if (productsError) throw productsError
 
-export default async function SellerProfilePage({ params }) {
-  const { sellerId } = params
-
-  // Get logged-in user (for showing "Add Product" if owner)
-  const { data: { user: currentUser } } = await supabase.auth.getUser()
-
-  // Seller profile with linked basic profile data
-  const { data: seller, error: sellerError } = await supabase
-    .from('seller_profiles')
-    .select(`
-      farm_name,
-      bio,
-      cover_image_url,
-      profiles (
-        full_name,
-        avatar_url,
-        email,
-        phone,
-        city,
-        state
-      )
-    `)
-    .eq('id', sellerId)
-    .single()
-
-  if (sellerError || !seller || !seller.profiles) {
-    return notFound()
+      setSeller(sellerData)
+      setProducts(productsData || [])
+    } catch (error) {
+      console.error('Error loading seller data:', error)
+      router.push('/products')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const isOwner = currentUser?.id === sellerId
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
+      </div>
+    )
+  }
 
-  // Get all approved products
-  const { data: products, error: productsError } = await supabase
-    .from('products')
-    .select(`
-      id,
-      name,
-      description,
-      price,
-      images,
-      status,
-      reviews(rating)
-    `)
-    .eq('seller_id', sellerId)
-    .eq('status', 'approved')
-    .order('created_at', { ascending: false })
-
-  if (productsError) {
-    throw new Error(productsError.message)
+  if (!seller) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">❌</div>
+          <p className="text-gray-600">Seller not found</p>
+          <button
+            onClick={() => router.push('/products')}
+            className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          >
+            Back to Products
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <main className="max-w-6xl mx-auto p-6">
-      <section className="flex items-center space-x-6 mb-10">
-        {seller.cover_image_url && (
-          <Image
-            src={seller.cover_image_url}
-            alt={`${seller.farm_name} cover`}
-            width={150}
-            height={150}
-            className="rounded-lg object-cover shadow"
-          />
-        )}
-        <div>
-          <h1 className="text-4xl font-bold text-green-900">{seller.farm_name}</h1>
-          {seller.bio && <p className="mt-2 text-gray-700 max-w-xl">{seller.bio}</p>}
-          {seller.profiles.city && seller.profiles.state && (
-            <p className="mt-1 text-gray-500">
-              Located in {seller.profiles.city}, {seller.profiles.state}
-            </p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <button
+              onClick={() => router.push('/products')}
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
+            >
+              ← Back to Products
+            </button>
+            <h1 className="text-xl font-semibold text-gray-900">
+              {seller.seller_profiles?.farm_name || 'Seller Store'}
+            </h1>
+            <div className="w-20"></div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Seller Profile */}
+        <div className="bg-white rounded-lg shadow p-8 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Seller Avatar and Basic Info */}
+            <div className="text-center md:text-left">
+              <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto md:mx-0 mb-4">
+                <span className="text-3xl text-green-600">
+                  {seller.full_name?.[0]?.toUpperCase() || 'S'}
+                </span>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                {seller.seller_profiles?.farm_name || 'Local Farm'}
+              </h2>
+              <p className="text-gray-600 mb-2">{seller.full_name}</p>
+              {seller.location && (
+                <p className="text-sm text-gray-500 mb-2">📍 {seller.location}</p>
+              )}
+              {seller.phone && (
+                <p className="text-sm text-gray-500">📞 {seller.phone}</p>
+              )}
+            </div>
+
+            {/* Seller Bio and Stats */}
+            <div className="md:col-span-2">
+              {seller.seller_profiles?.bio && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">About</h3>
+                  <p className="text-gray-700">{seller.seller_profiles.bio}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">{products.length}</p>
+                  <p className="text-sm text-gray-500">Products</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {seller.seller_profiles?.years_farming || 0}
+                  </p>
+                  <p className="text-sm text-gray-500">Years Farming</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {seller.seller_profiles?.rating?.toFixed(1) || '0.0'}
+                  </p>
+                  <p className="text-sm text-gray-500">Rating</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {seller.seller_profiles?.total_reviews || 0}
+                  </p>
+                  <p className="text-sm text-gray-500">Reviews</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Products Section */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-semibold text-gray-900">
+              Products from {seller.seller_profiles?.farm_name || 'this seller'}
+            </h3>
+            <span className="text-sm text-gray-500">{products.length} products</span>
+          </div>
+
+          {products.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-4xl mb-4">🥬</div>
+              <p className="text-gray-600">No products available</p>
+              <p className="text-sm text-gray-500">Check back later for fresh produce</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {products.map((product) => (
+                <div
+                  key={product.id}
+                  className="bg-gray-50 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => router.push(`/products/${product.id}`)}
+                >
+                  <div className="aspect-square bg-gray-100 rounded-lg mb-4 flex items-center justify-center">
+                    {product.images && product.images.length > 0 ? (
+                      <img
+                        src={product.images[0]}
+                        alt={product.name}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <div className="text-4xl">🥬</div>
+                    )}
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-2">{product.name}</h4>
+                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-green-600">₹{product.price}/{product.unit}</span>
+                    <span className="text-sm text-gray-500">{product.quantity_available} available</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
-      </section>
-
-      <section>
-        <h2 className="text-3xl font-semibold mb-6 text-green-800">Products</h2>
-        
-        {products.length === 0 ? (
-          <div>
-            <p className="text-gray-600">No products available from this seller yet.</p>
-            {isOwner && (
-              <Link href="/dashboard/seller/products/new" className="text-green-700 underline block mt-2">
-                ➕ Add your first product
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {products.map((product) => {
-              const ratings = product.reviews ?? []
-              const avgRating = averageRating(ratings.map(r => r.rating))
-
-              return (
-                <div key={product.id} className="border rounded-lg shadow hover:shadow-lg transition p-4">
-                  {product.images?.length > 0 && (
-                    <Image
-                      src={product.images[0]}
-                      alt={product.name}
-                      width={300}
-                      height={200}
-                      className="rounded-md object-cover"
-                    />
-                  )}
-                  <h3 className="text-xl font-bold mt-3">{product.name}</h3>
-                  <p className="mt-1 text-gray-700">{product.description}</p>
-                  <p className="mt-2 font-semibold text-green-700">
-                    ${product.price.toFixed(2)}
-                  </p>
-                  <RatingStars rating={avgRating} />
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </section>
-    </main>
+      </main>
+    </div>
   )
 }
