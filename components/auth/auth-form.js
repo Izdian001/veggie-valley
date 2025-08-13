@@ -67,10 +67,10 @@ export default function AuthForm() {
       if (error) {
         setErrorMsg(error.message)
       } else {
-        // For sellers, we need to create both the base profile and seller profile
+        // For sellers, we need to store the profile data in user metadata for later use
         if (form.role === 'seller' && data.user) {
           try {
-            console.log('Creating seller profile for user:', data.user.id)
+            console.log('Storing seller profile data in user metadata for user:', data.user.id)
             console.log('Form data:', {
               farmName: form.farmName,
               bio: form.bio,
@@ -79,50 +79,31 @@ export default function AuthForm() {
               location: form.location
             })
 
-            // First, upsert the base profile with phone and location
-            const { data: baseProfileData, error: baseProfileError } = await supabase
-              .from('profiles')
-              .upsert({
-                id: data.user.id,
-                email: form.email,
+            // Store the profile data in user metadata so it can be used later
+            const { error: updateError } = await supabase.auth.updateUser({
+              data: {
                 full_name: form.name,
-                phone: form.phone,
-                address: form.location
-              })
-              .select()
+                role: form.role,
+                // Store seller profile data for later use
+                seller_profile: {
+                  farm_name: form.farmName,
+                  bio: form.bio,
+                  years_farming: parseInt(form.yearsFarming) || 0,
+                  phone: form.phone,
+                  location: form.location
+                }
+              }
+            })
 
-            if (baseProfileError) {
-              console.error('Base profile upsert error:', baseProfileError)
-              setErrorMsg(`Base profile error: ${baseProfileError.message}`)
+            if (updateError) {
+              console.error('User metadata update error:', updateError)
+              setErrorMsg(`Profile data storage error: ${updateError.message}`)
             } else {
-              console.log('Base profile created/updated:', baseProfileData)
-            }
-
-            // Then, upsert the seller profile
-            const { data: sellerProfileData, error: sellerProfileError } = await supabase
-              .from('seller_profiles')
-              .upsert({
-                id: data.user.id,
-                farm_name: form.farmName,
-                bio: form.bio,
-                years_farming: parseInt(form.yearsFarming) || 0
-              })
-              .select()
-
-            if (sellerProfileError) {
-              console.error('Seller profile error:', sellerProfileError)
-              setErrorMsg(`Seller profile error: ${sellerProfileError.message}`)
-            } else {
-              console.log('Seller profile created/updated:', sellerProfileData)
-            }
-
-            // Verify both profiles were created
-            if (!baseProfileError && !sellerProfileError) {
-              console.log('✅ Both profiles created successfully!')
+              console.log('✅ Seller profile data stored in user metadata successfully!')
             }
           } catch (profileError) {
-            console.error('Profile creation error:', profileError)
-            setErrorMsg(`Profile creation failed: ${profileError.message}`)
+            console.error('Profile data storage error:', profileError)
+            setErrorMsg(`Profile data storage failed: ${profileError.message}`)
           }
         }
 

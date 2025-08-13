@@ -15,6 +15,13 @@ export default function SellerDashboard() {
     checkUser()
   }, [])
 
+  // Redirect to profile setup if profile doesn't exist
+  useEffect(() => {
+    if (user && !loading && !profile) {
+      router.push('/seller/setup-profile')
+    }
+  }, [user, loading, profile, router])
+
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user || user.user_metadata?.role !== 'seller') {
