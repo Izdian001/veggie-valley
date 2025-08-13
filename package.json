@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "clean": "if exist .next rmdir /s /q .next",
+    "dev": "npm run clean && next dev",
+    "clean": "if exist .next rmdir /s /q .next && if exist node_modules\\.cache rmdir /s /q node_modules\\.cache",
     "build": "npm run clean && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "fresh": "npm run clean && npm install && npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.6.0",
