@@ -18,11 +18,30 @@ export async function signUp(formData) {
     },
   }
 
-  const { error } = await supabase.auth.signUp(data)
+  const { data: authData, error } = await supabase.auth.signUp(data)
 
   if (error) {
     console.error('Signup error:', error)
     redirect('/auth/error')
+  }
+
+  // If seller, create seller profile
+  if (authData.user && formData.get('role') === 'seller') {
+    const { error: profileError } = await supabase
+      .from('seller_profiles')
+      .insert({
+        id: authData.user.id,
+        farm_name: formData.get('farm_name') || '',
+        bio: formData.get('bio') || '',
+        experience_years: parseInt(formData.get('experience_years')) || 0,
+        location: formData.get('location') || '',
+        phone: formData.get('phone') || '',
+        created_at: new Date().toISOString()
+      })
+
+    if (profileError) {
+      console.error('Profile creation error:', profileError)
+    }
   }
 
   revalidatePath('/', 'layout')
@@ -44,8 +63,18 @@ export async function signIn(formData) {
     redirect('/auth/error')
   }
 
+  // Get user to check role and redirect accordingly
+  const { data: { user } } = await supabase.auth.getUser()
+  
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  
+  if (user?.user_metadata?.role === 'seller') {
+    redirect('/seller/dashboard')
+  } else if (user?.user_metadata?.role === 'admin') {
+    redirect('/admin/dashboard')
+  } else {
+    redirect('/dashboard')
+  }
 }
 
 export async function signOut() {

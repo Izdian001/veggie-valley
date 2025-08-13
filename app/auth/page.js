@@ -1,59 +1,54 @@
-import  AuthForm  from '@/components/auth/auth-form'
+import AuthForm from '@/components/auth/auth-form'
 
 export default function AuthPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-100 to-amber-100 relative overflow-hidden">
-      {/* SVG vegetable background */}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 relative overflow-hidden">
       <VegetableBg />
-      <div className="max-w-md w-full z-10 rounded-xl shadow-xl bg-white/95 py-8 px-6">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-green-800 mb-2 flex items-center justify-center gap-2">
-            Login
-          </h1>
-          <p className="text-lg text-green-700 font-semibold mb-6">Online Vegetable Vendor</p>
+      
+      <div className="max-w-lg w-full z-10 rounded-2xl shadow-2xl bg-white/95 backdrop-blur-sm py-10 px-8 mx-4">
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center mr-3">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-800">Veggie Valley</h1>
+          </div>
+          <p className="text-lg text-gray-600 font-medium">Fresh from Farm to Table</p>
         </div>
+        
         <AuthForm />
       </div>
     </div>
   )
 }
 
-// SVG backgrounds for demo vegetable look
 function VegetableBg() {
   return (
     <div aria-hidden="true" className="absolute inset-0 pointer-events-none z-0">
-      {/* Top left - green lettuce/circle */}
-      <svg className="absolute top-5 left-6 w-12 h-12" viewBox="0 0 40 40">
-        <circle cx="18" cy="18" r="15" fill="#B9F881" />
-        <ellipse cx="25" cy="18" rx="7" ry="12" fill="#90DA5A" />
-      </svg>
-      {/* Mid left - small green oval */}
-      <svg className="absolute top-1/3 left-2 w-4 h-8" viewBox="0 0 16 32">
-        <ellipse cx="8" cy="16" rx="4" ry="8" fill="#CDEFC2" />
-      </svg>
-      {/* Bottom left - flat green oval */}
-      <svg className="absolute bottom-6 left-5 w-16 h-8" viewBox="0 0 32 16">
-        <ellipse cx="16" cy="8" rx="14" ry="7" fill="#8BD58A" />
-      </svg>
-      {/* Top right - carrot (replica) */}
-      <svg className="absolute top-5 right-5 w-10 h-20" viewBox="0 0 30 60">
-        <rect x="13" y="25" width="4" height="25" rx="2.5" fill="#FACC15" />
-        <rect x="17" y="29" width="2" height="21" rx="1" fill="#F59E42" />
-        {/* Green stalks */}
-        <line x1="15" y1="25" x2="28" y2="8" stroke="#6DB35A" strokeWidth="2"/>
-        <line x1="15" y1="25" x2="2" y2="4" stroke="#6DB35A" strokeWidth="2"/>
-      </svg>
-      {/* Bottom right - tomato */}
-      <svg className="absolute bottom-5 right-7 w-12 h-12" viewBox="0 0 40 40">
-        <circle cx="18" cy="18" r="13" fill="#F62C25" />
-        <ellipse cx="18" cy="13" rx="8" ry="3" fill="#57A849" />
-        {/* Small green stem */}
-        <rect x="15" y="8" width="6" height="3" rx="1" fill="#57A849" />
-      </svg>
-      {/* Floating green oval (bottom center) */}
-      <svg className="absolute bottom-2 left-1/2 -translate-x-1/2 w-7 h-5" viewBox="0 0 14 10">
-        <ellipse cx="7" cy="5" rx="7" ry="5" fill="#9FE189" />
-      </svg>
+      <div className="absolute top-10 left-10 w-16 h-16 animate-bounce">
+        <svg viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="24" fill="#B9F881" opacity="0.8" />
+          <ellipse cx="40" cy="32" rx="12" ry="20" fill="#90DA5A" opacity="0.6" />
+        </svg>
+      </div>
+      
+      <div className="absolute top-1/4 right-16 w-12 h-24 animate-pulse">
+        <svg viewBox="0 0 48 96">
+          <rect x="20" y="40" width="8" height="40" rx="4" fill="#FACC15" />
+          <rect x="28" y="44" width="4" height="36" rx="2" fill="#F59E42" />
+          <line x1="24" y1="40" x2="40" y2="16" stroke="#6DB35A" strokeWidth="3"/>
+          <line x1="24" y1="40" x2="8" y2="8" stroke="#6DB35A" strokeWidth="3"/>
+        </svg>
+      </div>
+      
+      <div className="absolute bottom-20 left-1/4 w-14 h-14">
+        <svg viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="20" fill="#F62C25" opacity="0.7" />
+          <ellipse cx="28" cy="20" rx="12" ry="4" fill="#57A849" opacity="0.8" />
+        </svg>
+      </div>
     </div>
   )
 }
