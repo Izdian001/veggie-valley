@@ -8,9 +8,19 @@ export default function AdminDashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeSellers: 0,
+    totalProducts: 0,
+    pendingReviews: 0
+  })
 
   useEffect(() => {
     checkUser()
+    loadStats()
+    // Set up real-time updates
+    const interval = setInterval(loadStats, 30000) // Update every 30 seconds
+    return () => clearInterval(interval)
   }, [])
 
   const checkUser = async () => {
@@ -26,6 +36,42 @@ export default function AdminDashboard() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/')
+  }
+
+  const loadStats = async () => {
+    try {
+      // Get total users
+      const { count: totalUsers } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+
+      // Get active sellers
+      const { count: activeSellers } = await supabase
+        .from('seller_profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_approved', true)
+
+      // Get total products
+      const { count: totalProducts } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_approved', true)
+
+      // Get pending reviews (content flags)
+      const { count: pendingReviews } = await supabase
+        .from('content_flags')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_resolved', false)
+
+      setStats({
+        totalUsers: totalUsers || 0,
+        activeSellers: activeSellers || 0,
+        totalProducts: totalProducts || 0,
+        pendingReviews: pendingReviews || 0
+      })
+    } catch (error) {
+      console.error('Error loading stats:', error)
+    }
   }
 
   if (loading) {
@@ -175,7 +221,7 @@ export default function AdminDashboard() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Total Users</p>
-                <p className="text-2xl font-semibold text-gray-900">0</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.totalUsers}</p>
               </div>
             </div>
           </div>
@@ -189,7 +235,7 @@ export default function AdminDashboard() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Active Sellers</p>
-                <p className="text-2xl font-semibold text-gray-900">0</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.activeSellers}</p>
               </div>
             </div>
           </div>
@@ -203,7 +249,7 @@ export default function AdminDashboard() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Total Products</p>
-                <p className="text-2xl font-semibold text-gray-900">0</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.totalProducts}</p>
               </div>
             </div>
           </div>
@@ -217,7 +263,7 @@ export default function AdminDashboard() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Pending Reviews</p>
-                <p className="text-2xl font-semibold text-gray-900">0</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.pendingReviews}</p>
               </div>
             </div>
           </div>
