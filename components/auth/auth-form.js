@@ -70,8 +70,17 @@ export default function AuthForm() {
         // For sellers, we need to create both the base profile and seller profile
         if (form.role === 'seller' && data.user) {
           try {
+            console.log('Creating seller profile for user:', data.user.id)
+            console.log('Form data:', {
+              farmName: form.farmName,
+              bio: form.bio,
+              yearsFarming: form.yearsFarming,
+              phone: form.phone,
+              location: form.location
+            })
+
             // First, upsert the base profile with phone and location
-            const { error: baseProfileError } = await supabase
+            const { data: baseProfileData, error: baseProfileError } = await supabase
               .from('profiles')
               .upsert({
                 id: data.user.id,
@@ -80,13 +89,17 @@ export default function AuthForm() {
                 phone: form.phone,
                 address: form.location
               })
+              .select()
 
             if (baseProfileError) {
               console.error('Base profile upsert error:', baseProfileError)
+              setErrorMsg(`Base profile error: ${baseProfileError.message}`)
+            } else {
+              console.log('Base profile created/updated:', baseProfileData)
             }
 
             // Then, upsert the seller profile
-            const { error: sellerProfileError } = await supabase
+            const { data: sellerProfileData, error: sellerProfileError } = await supabase
               .from('seller_profiles')
               .upsert({
                 id: data.user.id,
@@ -94,12 +107,22 @@ export default function AuthForm() {
                 bio: form.bio,
                 years_farming: parseInt(form.yearsFarming) || 0
               })
+              .select()
 
             if (sellerProfileError) {
               console.error('Seller profile error:', sellerProfileError)
+              setErrorMsg(`Seller profile error: ${sellerProfileError.message}`)
+            } else {
+              console.log('Seller profile created/updated:', sellerProfileData)
+            }
+
+            // Verify both profiles were created
+            if (!baseProfileError && !sellerProfileError) {
+              console.log('✅ Both profiles created successfully!')
             }
           } catch (profileError) {
             console.error('Profile creation error:', profileError)
+            setErrorMsg(`Profile creation failed: ${profileError.message}`)
           }
         }
 
