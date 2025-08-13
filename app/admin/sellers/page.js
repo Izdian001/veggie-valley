@@ -27,43 +27,66 @@ export default function ManageSellers() {
 
   const loadSellers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('seller_profiles')
+      // First get all profiles that have seller_profiles
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
         .select(`
-          *,
-          profiles (
+          id,
+          full_name,
+          email,
+          phone,
+          address,
+          created_at,
+          updated_at,
+          seller_profiles (
             id,
-            full_name,
-            email,
-            phone,
-            address
-          ),
-          seller_reviews (
-            id,
+            farm_name,
+            bio,
+            years_farming,
+            certifications,
+            cover_image_url,
             rating,
-            review_text,
-            is_flagged,
-            flag_reason,
-            created_at
+            total_reviews,
+            is_approved,
+            approved_by,
+            approved_at,
+            created_at,
+            updated_at
           )
         `)
+        .not('seller_profiles', 'is', null)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (profilesError) throw profilesError
 
-      // Calculate average ratings and review counts
-      const sellersWithStats = data.map(seller => {
-        const reviews = seller.seller_reviews || []
-        const avgRating = reviews.length > 0 
-          ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length 
-          : 0
-        const flaggedReviews = reviews.filter(review => review.is_flagged).length
+      // Transform the data to match the expected format
+      const sellersWithStats = profiles.map(profile => {
+        const sellerProfile = profile.seller_profiles?.[0] || {}
         
         return {
-          ...seller,
-          avgRating: Math.round(avgRating * 10) / 10,
-          totalReviews: reviews.length,
-          flaggedReviews
+          id: sellerProfile.id,
+          profiles: {
+            id: profile.id,
+            full_name: profile.full_name,
+            email: profile.email,
+            phone: profile.phone,
+            address: profile.address
+          },
+          farm_name: sellerProfile.farm_name,
+          bio: sellerProfile.bio,
+          years_farming: sellerProfile.years_farming,
+          certifications: sellerProfile.certifications,
+          cover_image_url: sellerProfile.cover_image_url,
+          rating: sellerProfile.rating || 0,
+          total_reviews: sellerProfile.total_reviews || 0,
+          is_approved: sellerProfile.is_approved || false,
+          approved_by: sellerProfile.approved_by,
+          approved_at: sellerProfile.approved_at,
+          created_at: sellerProfile.created_at,
+          updated_at: sellerProfile.updated_at,
+          avgRating: sellerProfile.rating || 0,
+          totalReviews: sellerProfile.total_reviews || 0,
+          flaggedReviews: 0 // We'll add this later if needed
         }
       })
 

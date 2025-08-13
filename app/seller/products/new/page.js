@@ -110,15 +110,16 @@ export default function NewProductPage() {
           images: imageUrls,
           is_organic: form.isOrganic,
           harvest_date: form.harvestDate || null,
-          expiry_date: form.expiryDate || null
+          expiry_date: form.expiryDate || null,
+          is_approved: true // Set to true by default - no admin approval needed
         })
 
       if (error) {
         throw error
       }
 
-      alert('Product added successfully! It will be reviewed by admin before going live.')
-      router.push('/seller/products')
+      alert('Product added successfully!')
+      router.push('/seller/dashboard')
     } catch (error) {
       setErrorMsg(error.message)
     } finally {

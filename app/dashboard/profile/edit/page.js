@@ -67,36 +67,46 @@ export default function EditBuyerProfilePage() {
     e.preventDefault()
     if (!user) return
     setSaving(true)
-    const { error: pErr } = await supabase
-      .from('profiles')
-      .upsert({
-        id: user.id,
-        email: user.email,
-        full_name: form.full_name,
-        username: form.username || null,
-        phone: form.phone || null,
-        address: form.address || null,
-        city: form.city || null,
-        state: form.state || null,
-        postal_code: form.postal_code || null
-      })
-    let bErr = null
-    if (!pErr) {
-      const prefs = form.preferences_input
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-      const { error } = await supabase
-        .from('buyer_profiles')
-        .upsert({ id: user.id, preferences: prefs })
-      bErr = error
+    
+    try {
+      const { error: pErr } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          full_name: form.full_name,
+          username: form.username || null,
+          phone: form.phone || null,
+          address: form.address || null,
+          city: form.city || null,
+          state: form.state || null,
+          postal_code: form.postal_code || null
+        })
+      
+      let bErr = null
+      if (!pErr) {
+        const prefs = form.preferences_input
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+        const { error } = await supabase
+          .from('buyer_profiles')
+          .upsert({ id: user.id, preferences: prefs })
+        bErr = error
+      }
+      
+      if (pErr || bErr) {
+        alert((pErr || bErr).message)
+        return
+      }
+      
+      router.push('/dashboard/profile')
+    } catch (error) {
+      console.error('Error saving profile:', error)
+      alert('Error saving profile. Please try again.')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-    if (pErr || bErr) {
-      alert((pErr || bErr).message)
-      return
-    }
-    router.push('/dashboard/profile')
   }
 
   if (loading) {
@@ -119,7 +129,7 @@ export default function EditBuyerProfilePage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form onSubmit={save} className="bg-white rounded-lg shadow p-6 space-y-4">
+        <form onSubmit={save} className="bg-white rounded-lg shadow p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Full name</label>
             <input name="full_name" value={form.full_name} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" />

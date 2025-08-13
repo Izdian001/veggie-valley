@@ -40,22 +40,20 @@ export default function AdminDashboard() {
 
   const loadStats = async () => {
     try {
-      // Get total users
+      // Get total users (all profiles)
       const { count: totalUsers } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true })
 
-      // Get active sellers
+      // Get all sellers (both approved and pending)
       const { count: activeSellers } = await supabase
         .from('seller_profiles')
         .select('*', { count: 'exact', head: true })
-        .eq('is_approved', true)
 
-      // Get total products
+      // Get all products (both approved and pending)
       const { count: totalProducts } = await supabase
         .from('products')
         .select('*', { count: 'exact', head: true })
-        .eq('is_approved', true)
 
       // Get pending reviews (content flags)
       const { count: pendingReviews } = await supabase
@@ -136,20 +134,6 @@ export default function AdminDashboard() {
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
             >
               View Sellers
-            </button>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Product Moderation</h3>
-              <div className="text-2xl">📦</div>
-            </div>
-            <p className="text-gray-600 mb-4">Review and approve product listings</p>
-            <button
-              onClick={() => router.push('/admin/products')}
-              className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
-            >
-              Review Products
             </button>
           </div>
 

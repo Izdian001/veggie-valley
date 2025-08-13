@@ -9,12 +9,21 @@ export default function ProductDetail() {
   const params = useParams()
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null)
+  const [orderQuantity, setOrderQuantity] = useState(1)
+  const [placingOrder, setPlacingOrder] = useState(false)
 
   useEffect(() => {
+    checkUser()
     if (params.productId) {
       loadProduct()
     }
   }, [params.productId])
+
+  const checkUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setUser(user)
+  }
 
   const loadProduct = async () => {
     try {
@@ -22,14 +31,14 @@ export default function ProductDetail() {
         .from('products')
         .select(`
           *,
-          profiles!products_seller_id_fkey (
+          profiles (
             id,
             full_name,
             avatar_url,
             phone,
-            location
+            address
           ),
-          seller_profiles!products_seller_id_fkey (
+          seller_profiles (
             farm_name,
             bio,
             years_farming,
@@ -41,7 +50,7 @@ export default function ProductDetail() {
           )
         `)
         .eq('id', params.productId)
-        .eq('status', 'approved')
+        .eq('is_approved', true)
         .single()
 
       if (error) throw error
@@ -51,6 +60,63 @@ export default function ProductDetail() {
       router.push('/products')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePlaceOrder = async () => {
+    if (!user) {
+      alert('Please sign in to place an order')
+      router.push('/auth')
+      return
+    }
+
+    if (orderQuantity < product.min_order_quantity) {
+      alert(`Minimum order quantity is ${product.min_order_quantity} ${product.unit}`)
+      return
+    }
+
+    if (orderQuantity > product.quantity_available) {
+      alert(`Only ${product.quantity_available} ${product.unit} available`)
+      return
+    }
+
+    setPlacingOrder(true)
+    try {
+      // Create order
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          buyer_id: user.id,
+          seller_id: product.seller_id,
+          product_id: product.id,
+          quantity: orderQuantity,
+          unit_price: product.price,
+          total_amount: product.price * orderQuantity,
+          status: 'pending',
+          order_date: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (orderError) throw orderError
+
+      // Update product quantity
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({
+          quantity_available: product.quantity_available - orderQuantity
+        })
+        .eq('id', product.id)
+
+      if (updateError) throw updateError
+
+      alert('Order placed successfully! The seller will be notified.')
+      router.push('/dashboard')
+    } catch (error) {
+      console.error('Error placing order:', error)
+      alert('Error placing order. Please try again.')
+    } finally {
+      setPlacingOrder(false)
     }
   }
 
@@ -172,6 +238,44 @@ export default function ProductDetail() {
               )}
             </div>
 
+            {/* Order Section */}
+            <div className="bg-white rounded-lg p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Place Order</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quantity ({product.unit})
+                  </label>
+                  <input
+                    type="number"
+                    min={product.min_order_quantity}
+                    max={product.quantity_available}
+                    value={orderQuantity}
+                    onChange={(e) => setOrderQuantity(parseInt(e.target.value) || 0)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Min: {product.min_order_quantity} {product.unit} | Max: {product.quantity_available} {product.unit}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-medium text-gray-900">Total Amount:</span>
+                    <span className="text-2xl font-bold text-green-600">
+                      ₹{(product.price * orderQuantity).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={handlePlaceOrder}
+                  disabled={placingOrder || orderQuantity < product.min_order_quantity || orderQuantity > product.quantity_available}
+                  className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+                >
+                  {placingOrder ? 'Placing Order...' : 'Place Order'}
+                </button>
+              </div>
+            </div>
+
             {/* Seller Information */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <div className="flex items-center space-x-4 mb-4">
@@ -185,8 +289,8 @@ export default function ProductDetail() {
                     {product.seller_profiles?.farm_name || 'Local Farm'}
                   </h3>
                   <p className="text-gray-600">{product.profiles?.full_name}</p>
-                  {product.profiles?.location && (
-                    <p className="text-sm text-gray-500">📍 {product.profiles.location}</p>
+                  {product.profiles?.address && (
+                    <p className="text-sm text-gray-500">�� {product.profiles.address}</p>
                   )}
                 </div>
               </div>

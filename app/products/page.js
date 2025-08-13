@@ -17,6 +17,9 @@ export default function Products() {
 
   const loadProducts = async () => {
     try {
+      console.log('Loading products...')
+      
+      // Get all approved products with seller information
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -33,10 +36,15 @@ export default function Products() {
             name
           )
         `)
-        .eq('status', 'approved')
+        .eq('is_approved', true)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
+      
+      console.log('Products loaded:', data)
       setProducts(data || [])
     } catch (error) {
       console.error('Error loading products:', error)
@@ -76,12 +84,6 @@ export default function Products() {
                 className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
               >
                 Dashboard
-              </button>
-              <button
-                onClick={() => router.push('/auth')}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
-              >
-                Sign In
               </button>
             </div>
           </div>
@@ -124,8 +126,7 @@ export default function Products() {
           {filteredProducts.map((product) => (
             <div
               key={product.id}
-              className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => router.push(`/products/${product.id}`)}
+              className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow"
             >
               <div className="aspect-square bg-gray-100 rounded-t-lg flex items-center justify-center">
                 {product.images && product.images.length > 0 ? (
@@ -145,7 +146,7 @@ export default function Products() {
                   <span className="text-lg font-bold text-green-600">₹{product.price}/{product.unit}</span>
                   <span className="text-sm text-gray-500">{product.quantity_available} available</span>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 mb-3">
                   <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
                     <span className="text-xs text-green-600">
                       {product.profiles?.full_name?.[0]?.toUpperCase() || 'F'}
@@ -153,6 +154,12 @@ export default function Products() {
                   </div>
                   <span className="text-sm text-gray-600">{product.seller_profiles?.farm_name || 'Local Farm'}</span>
                 </div>
+                <button
+                  onClick={() => router.push(`/products/${product.id}`)}
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium"
+                >
+                  View Details
+                </button>
               </div>
             </div>
           ))}
