@@ -64,6 +64,12 @@ export default function BuyerDashboard() {
                 Browse Products
               </button>
               <button
+                onClick={() => router.push('/dashboard/profile')}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-700"
+              >
+                Profile
+              </button>
+              <button
                 onClick={() => router.push('/orders')}
                 className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-700"
               >
@@ -145,27 +151,7 @@ export default function BuyerDashboard() {
           </div>
         </div>
 
-        {/* Featured Categories */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Popular Categories</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { name: 'Leafy Greens', icon: '🥬', color: 'bg-green-100' },
-              { name: 'Root Vegetables', icon: '🥕', color: 'bg-orange-100' },
-              { name: 'Tomatoes', icon: '🍅', color: 'bg-red-100' },
-              { name: 'Herbs', icon: '🌿', color: 'bg-emerald-100' }
-            ].map((category) => (
-              <button
-                key={category.name}
-                onClick={() => router.push(`/products?category=${category.name.toLowerCase()}`)}
-                className={`p-4 rounded-lg ${category.color} hover:shadow-md transition-all text-center`}
-              >
-                <div className="text-2xl mb-2">{category.icon}</div>
-                <p className="text-sm font-medium text-gray-900">{category.name}</p>
-              </button>
-            ))}
-          </div>
-        </div>
+
 
         {/* Recent Activity */}
         <div className="bg-white rounded-lg shadow p-6">
