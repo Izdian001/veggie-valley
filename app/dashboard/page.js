@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 export default function BuyerDashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -31,6 +32,15 @@ export default function BuyerDashboard() {
     }
     
     setUser(user)
+    
+    // Load profile data including avatar
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('full_name, avatar_url')
+      .eq('id', user.id)
+      .single()
+    
+    setProfile(profileData)
     setLoading(false)
   }
 
@@ -90,10 +100,18 @@ export default function BuyerDashboard() {
         {/* Welcome Section */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
+            <div className="w-16 h-16 bg-green-100 rounded-full overflow-hidden flex items-center justify-center">
+              {profile?.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+              )}
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">

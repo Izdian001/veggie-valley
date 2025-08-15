@@ -18,9 +18,6 @@ export default function Home() {
             <Link href="/auth">
               <Button size="lg">Get Started</Button>
             </Link>
-            <Link href="/dashboard">
-              <Button variant="outline" size="lg">Dashboard</Button>
-            </Link>
           </div>
           
           <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">

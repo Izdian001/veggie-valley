@@ -15,12 +15,7 @@ export default function SellerDashboard() {
     checkUser()
   }, [])
 
-  // Redirect to profile setup if profile doesn't exist
-  useEffect(() => {
-    if (user && !loading && !profile) {
-      router.push('/seller/setup-profile')
-    }
-  }, [user, loading, profile, router])
+  // No longer redirecting to profile setup - users can edit profile later
 
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -73,7 +68,7 @@ export default function SellerDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => router.push('/seller/setup')}
+                onClick={() => router.push('/seller/profile/edit')}
                 className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700"
               >
                 Edit Profile
@@ -147,8 +142,8 @@ export default function SellerDashboard() {
                 </div>
                 <div>
                   <span className="text-sm font-medium text-gray-500">Status:</span>
-                  <p className={`text-sm font-medium ${profile.is_approved ? 'text-green-600' : 'text-yellow-600'}`}>
-                    {profile.is_approved ? 'Approved' : 'Pending Approval'}
+                  <p className="text-sm font-medium text-green-600">
+                    ✅ Approved
                   </p>
                 </div>
               </div>
@@ -214,7 +209,7 @@ export default function SellerDashboard() {
                 </div>
                 <div className="mt-4">
                   <button
-                    onClick={() => router.push('/seller/setup')}
+                    onClick={() => router.push('/seller/profile/edit')}
                     className="bg-yellow-400 px-4 py-2 rounded-md text-sm font-medium text-yellow-900 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-yellow-50 focus:ring-yellow-600"
                   >
                     Complete Profile

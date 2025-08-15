@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS public.seller_profiles (
   cover_image_url TEXT,
   rating DECIMAL(2,1) DEFAULT 0.0,
   total_reviews INTEGER DEFAULT 0,
-  is_approved BOOLEAN DEFAULT FALSE,
+      is_approved BOOLEAN DEFAULT TRUE,
   approved_by UUID REFERENCES public.profiles(id),
   approved_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()) NOT NULL,
@@ -247,3 +247,22 @@ SELECT
   created_at
 FROM public.products
 ORDER BY created_at DESC;
+
+-- ========== AUTO-APPROVAL QUERIES ==========
+
+-- Auto-approve all existing sellers
+UPDATE public.seller_profiles SET is_approved = true WHERE is_approved = false OR is_approved IS NULL;
+
+-- Auto-approve all existing products
+UPDATE public.products SET is_approved = true WHERE is_approved = false OR is_approved IS NULL;
+
+-- ========== STORAGE SETUP ==========
+
+-- Create avatars storage bucket (run this in Supabase SQL Editor)
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true);
+
+-- Storage policy for avatars (run this in Supabase SQL Editor)
+-- CREATE POLICY "Anyone can view avatars" ON storage.objects FOR SELECT USING (bucket_id = 'avatars');
+-- CREATE POLICY "Users can upload their own avatar" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
+-- CREATE POLICY "Users can update their own avatar" ON storage.objects FOR UPDATE USING (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
+-- CREATE POLICY "Users can delete their own avatar" ON storage.objects FOR DELETE USING (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);

@@ -82,8 +82,18 @@ export default function BuyerProfilePage() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-2xl">
-              {user?.user_metadata?.full_name?.[0]?.toUpperCase() || '😊'}
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-green-100 flex items-center justify-center text-2xl">
+              {profile?.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-green-600 font-semibold">
+                  {user?.user_metadata?.full_name?.[0]?.toUpperCase() || '😊'}
+                </span>
+              )}
             </div>
             <div>
               <p className="text-sm text-gray-500">{user?.email}</p>
