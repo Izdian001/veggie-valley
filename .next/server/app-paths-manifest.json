@@ -1,0 +1,9 @@
+{
+  "/products/[productId]/page": "app/products/[productId]/page.js",
+  "/seller/orders/page": "app/seller/orders/page.js",
+  "/orders/page": "app/orders/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/products/page": "app/products/page.js",
+  "/wishlist/page": "app/wishlist/page.js",
+  "/orders/[orderId]/page": "app/orders/[orderId]/page.js"
+}
