@@ -1,61 +1,24 @@
-// Updated Products page.js with wishlist integration
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
-import { wishlistUtils } from '@/lib/wishlistUtils';
-import WishlistButton from '@/components/ui/wishlist-button';
-import Link from 'next/link';
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
 
 export default function Products() {
-  const router = useRouter();
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [user, setUser] = useState(null);
-  const [wishlistCount, setWishlistCount] = useState(0);
+  const router = useRouter()
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
 
   useEffect(() => {
-    loadProducts();
-    fetchUser();
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      // Migrate localStorage wishlist when user loads
-      wishlistUtils.migrateLocalStorageWishlist();
-      loadWishlistCount();
-    }
-  }, [user]);
-
-  const fetchUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      if (!error) {
-        setUser({ ...user, role: profile.role });
-      }
-    }
-  };
-
-  const loadWishlistCount = async () => {
-    try {
-      const count = await wishlistUtils.getWishlistCount();
-      setWishlistCount(count);
-    } catch (error) {
-      console.error('Error loading wishlist count:', error);
-    }
-  };
+    loadProducts()
+  }, [])// Temporary auth check
+  supabase.auth.getUser().then(({ data }) => console.log('Auth user:', data?.user)).catch(console.error)
 
   const loadProducts = async () => {
     try {
-      console.log('Loading products...');
+      console.log('Loading products...')
       
       // Get all visible products with seller information
       const { data, error } = await supabase
@@ -63,38 +26,38 @@ export default function Products() {
         .select('*')
         // Visible if any of these match (supports schemas that use either is_approved or status)
         .or('is_approved.is.true,status.eq.active,status.eq.approved,status.is.null')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Supabase error:', error);
-        throw error;
+        console.error('Supabase error:', error)
+        throw error
       }
       
-      console.log('Products loaded:', data);
-      setProducts(data || []);
+      console.log('Products loaded:', data)
+      setProducts(data || [])
     } catch (error) {
-      console.error('Error loading products:', error);
+      console.error('Error loading products:', error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description?.toLowerCase().includes(searchTerm.toLowerCase());
+                         product.description?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === 'all' || 
-                           product.categories?.name?.toLowerCase() === selectedCategory.toLowerCase();
-    return matchesSearch && matchesCategory;
-  });
+                           product.categories?.name?.toLowerCase() === selectedCategory.toLowerCase()
+    return matchesSearch && matchesCategory
+  })
 
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.categories?.name).filter(Boolean)))];
+  const categories = ['all', ...Array.from(new Set(products.map(p => p.categories?.name).filter(Boolean)))]
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
       </div>
-    );
+    )
   }
 
   return (
@@ -105,49 +68,12 @@ export default function Products() {
           <div className="flex justify-between items-center py-4">
             <h1 className="text-2xl font-bold text-gray-900">Fresh Products</h1>
             <div className="space-x-3">
-              <Link
-                href="/products"
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
-              >
-                Browse Products
-              </Link>
-              {!loading && user && user.role === 'buyer' && (
-                <Link
-                  href="/wishlist"
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 relative"
-                >
-                  Wishlist
-                  {wishlistCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {wishlistCount > 99 ? '99+' : wishlistCount}
-                    </span>
-                  )}
-                </Link>
-              )}
-              <Link
-                href="/dashboard"
+              <button
+                onClick={() => router.push('/dashboard')}
                 className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
               >
                 Dashboard
-              </Link>
-              {!loading && user ? (
-                <button
-                  onClick={async () => {
-                    await supabase.auth.signOut();
-                    router.push('/');
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
-                >
-                  Sign Out
-                </button>
-              ) : (
-                <Link
-                  href="/auth"
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
-                >
-                  Sign In
-                </Link>
-              )}
+              </button>
             </div>
           </div>
         </div>
@@ -191,7 +117,7 @@ export default function Products() {
               key={product.id}
               className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow"
             >
-              <div className="aspect-square bg-gray-100 rounded-t-lg flex items-center justify-center relative">
+              <div className="aspect-square bg-gray-100 rounded-t-lg flex items-center justify-center">
                 {product.images && product.images.length > 0 ? (
                   <img
                     src={product.images[0]}
@@ -201,15 +127,9 @@ export default function Products() {
                 ) : (
                   <div className="text-4xl">🥬</div>
                 )}
-                {/* Wishlist button overlay */}
-                <div className="absolute top-2 right-2">
-                  <WishlistButton productId={product.id} />
-                </div>
               </div>
               <div className="p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-semibold text-gray-900 flex-1">{product.name}</h3>
-                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
                 <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-lg font-bold text-green-600">₹{product.price}/{product.unit}</span>
@@ -223,19 +143,12 @@ export default function Products() {
                   </div>
                   <span className="text-sm text-gray-600">{product.seller_profiles?.farm_name || 'Local Farm'}</span>
                 </div>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => router.push(`/products/${product.id}`)}
-                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium"
-                  >
-                    View Details
-                  </button>
-                  <WishlistButton 
-                    productId={product.id} 
-                    showText={true} 
-                    size="small"
-                  />
-                </div>
+                <button
+                  onClick={() => router.push(`/products/${product.id}`)}
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium"
+                >
+                  View Details
+                </button>
               </div>
             </div>
           ))}
@@ -250,5 +163,5 @@ export default function Products() {
         )}
       </main>
     </div>
-  );
+  )
 }
