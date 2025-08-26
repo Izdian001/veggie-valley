@@ -9,6 +9,7 @@ export default function SellerOrders() {
   const [user, setUser] = useState(null)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState(null)
 
   useEffect(() => {
     checkUser()
@@ -62,19 +63,28 @@ export default function SellerOrders() {
   }
 
   const updateOrderStatus = async (orderId, status) => {
+    // Optimistic UI update
+    const previous = orders
+    setSavingId(orderId)
+    setOrders((curr) => curr.map(o => o.id === orderId ? { ...o, status } : o))
+
     try {
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('orders')
         .update({ status })
         .eq('id', orderId)
+        .select()
 
       if (error) throw error
-
-      // Refresh orders
-      loadOrders()
+      console.log('Order status updated:', updated)
+      // Keep optimistic state; no reload to avoid race/flicker
     } catch (error) {
       console.error('Error updating order status:', error)
-      alert('Error updating order status. Please try again.')
+      alert(`Failed to update status: ${error?.message || 'Unknown error'}`)
+      // rollback
+      setOrders(previous)
+    } finally {
+      setSavingId(null)
     }
   }
 
@@ -210,7 +220,8 @@ export default function SellerOrders() {
                       <select
                         value={order.status}
                         onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        disabled={savingId === order.id}
+                        className={`px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${savingId === order.id ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
                         <option value={order.status}>{order.status.charAt(0).toUpperCase() + order.status.slice(1)}</option>
                         {getStatusOptions(order.status).map(status => (

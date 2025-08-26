@@ -53,17 +53,22 @@ export default function BuyerOrdersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">My Orders</h1>
-          <div className="space-x-2">
-            <button className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900" onClick={() => router.push('/dashboard')}>Dashboard</button>
-            <button className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900" onClick={() => router.push('/products')}>Shop</button>
-          </div>
-        </div>
-      </header>
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-5 py-2.5 text-base font-medium text-gray-700 hover:text-gray-900 rounded-md"
+          >
+            ← Back to Dashboard
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
+          <button
+            onClick={() => router.push('/products')}
+            className="px-5 py-2.5 text-base font-medium text-gray-700 hover:text-gray-900 rounded-md"
+          >
+            Shop
+          </button>
+        </div>
         <div className="bg-white rounded-lg shadow divide-y">
           {orders.length === 0 ? (
             <div className="p-8 text-center text-gray-500">No orders yet.</div>

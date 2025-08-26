@@ -14,6 +14,15 @@ export default function BuyerDashboard() {
     checkUser()
   }, [])
 
+  const fetchProfile = async (userId) => {
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('full_name, avatar_url')
+      .eq('id', userId)
+      .single()
+    setProfile(profileData)
+  }
+
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -32,17 +41,45 @@ export default function BuyerDashboard() {
     }
     
     setUser(user)
-    
-    // Load profile data including avatar
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('full_name, avatar_url')
-      .eq('id', user.id)
-      .single()
-    
-    setProfile(profileData)
+    await fetchProfile(user.id)
     setLoading(false)
   }
+
+  // Subscribe to profile changes and refresh on tab focus
+  useEffect(() => {
+    if (!user?.id) return
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('dashboard_profile_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        (payload) => {
+          // Prefer new record if present
+          const next = payload.new || payload.record
+          if (next) {
+            setProfile((prev) => ({ ...prev, ...next }))
+          } else {
+            // Fallback to refetch
+            fetchProfile(user.id)
+          }
+        }
+      )
+      .subscribe()
+
+    // Refresh on tab focus
+    const onFocus = () => fetchProfile(user.id)
+    window.addEventListener('visibilitychange', () => {
+      if (!document.hidden) onFocus()
+    })
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      try { supabase.removeChannel(channel) } catch {}
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [user?.id])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -59,44 +96,11 @@ export default function BuyerDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">Veggie Valley</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => router.push('/products')}
-                className="px-4 py-2 text-sm font-medium text-green-600 hover:text-green-700"
-              >
-                Browse Products
-              </button>
-              <button
-                onClick={() => router.push('/dashboard/profile')}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-700"
-              >
-                Profile
-              </button>
-              <button
-                onClick={() => router.push('/orders')}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-700"
-              >
-                My Orders
-              </button>
-              <button
-                onClick={handleSignOut}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-700"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Welcome to your Veggie Valley account</p>
+        </div>
         {/* Welcome Section */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="flex items-center space-x-4">
@@ -115,12 +119,13 @@ export default function BuyerDashboard() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                Welcome back, {user?.user_metadata?.full_name}!
+                Welcome back, {profile?.full_name || user?.user_metadata?.full_name || user?.email}!
               </h2>
               <p className="text-gray-600">
                 Discover fresh vegetables from local farmers
               </p>
             </div>
+            {/* Global Sign Out is now in the top bar via SignOutControl */}
           </div>
         </div>
 

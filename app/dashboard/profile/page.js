@@ -57,29 +57,22 @@ export default function BuyerProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <h1 className="text-xl font-semibold text-gray-900">My Profile</h1>
-            <div className="space-x-3">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => router.push('/dashboard/profile/edit')}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
-              >
-                Edit Profile
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+          >
+            ← Back to Dashboard
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
+          <button
+            onClick={() => router.push('/dashboard/profile/edit')}
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+          >
+            Edit Profile
+          </button>
+        </div>
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center space-x-4">
             <div className="w-16 h-16 rounded-full overflow-hidden bg-green-100 flex items-center justify-center text-2xl">

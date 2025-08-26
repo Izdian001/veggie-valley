@@ -9,6 +9,7 @@ export default function SellerOrdersPage() {
   const [user, setUser] = useState(null)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState(null)
 
   useEffect(() => {
     (async () => {
@@ -61,6 +62,52 @@ export default function SellerOrdersPage() {
     })()
   }, [])
 
+  const statusOptions = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
+
+  const statusBadgeClass = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'confirmed':
+        return 'bg-blue-100 text-blue-800'
+      case 'shipped':
+        return 'bg-purple-100 text-purple-800'
+      case 'delivered':
+        return 'bg-green-100 text-green-800'
+      case 'cancelled':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-700'
+    }
+  }
+
+  const updateOrderStatus = async (orderId, newStatus) => {
+    if (!user) return
+    // optimistic update
+    const prev = orders
+    setSavingId(orderId)
+    setOrders((curr) => curr.map(o => o.id === orderId ? { ...o, status: newStatus } : o))
+    try {
+      const { data: updated, error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId)
+        .select()
+      if (error) throw error
+      if (!updated || updated.length === 0) {
+        throw new Error('No rows updated (RLS or ownership mismatch)')
+      }
+      console.log('Order status updated:', updated)
+    } catch (e) {
+      console.error('Failed to update status:', e)
+      // rollback
+      setOrders(prev)
+      alert('Could not update status. Please try again.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -97,7 +144,17 @@ export default function SellerOrdersPage() {
                   <div className="text-xs text-gray-500">{order.buyer?.address || ''}</div>
                 </div>
                 <div className="flex justify-end items-center gap-2">
-                  <span className="inline-block px-2 py-1 text-xs rounded bg-gray-100 text-gray-700 capitalize">{order.status}</span>
+                  <span className={`inline-block px-2 py-1 text-xs rounded capitalize ${statusBadgeClass(order.status)}`}>{order.status}</span>
+                  <select
+                    value={order.status || 'pending'}
+                    onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                    disabled={savingId === order.id}
+                    className={`border rounded-md px-2 py-1 text-sm ${savingId === order.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    {statusOptions.map(opt => (
+                      <option key={opt} value={opt} className="capitalize">{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
+                    ))}
+                  </select>
                   <button onClick={() => router.push(`/orders/${order.id}`)} className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm">View Details</button>
                   <button onClick={() => router.push(`/orders/${order.id}/chat`)} className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">Open Chat</button>
                 </div>

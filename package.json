@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npm run clean && next dev",
-    "clean": "rm -rf dist node_modules/.cache",
+    "clean": "powershell -NoProfile -Command \"Remove-Item -Recurse -Force dist, node_modules/.cache -ErrorAction SilentlyContinue\"",
     "build": "npm run clean && next build",
     "start": "next start",
     "lint": "next lint",
