@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import WishlistButton from '@/components/ui/wishlist-button'
 
 export default function ProductDetail() {
   const router = useRouter()
@@ -14,6 +15,7 @@ export default function ProductDetail() {
   const [placingOrder, setPlacingOrder] = useState(false)
   const [sellerProfile, setSellerProfile] = useState(null)
   const [sellerStore, setSellerStore] = useState(null)
+  const [showPhone, setShowPhone] = useState(false)
 
   useEffect(() => {
     checkUser()
@@ -147,27 +149,19 @@ export default function ProductDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <button
-              onClick={() => router.push('/products')}
-              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
-            >
-              ← Back to Products
-            </button>
-            <h1 className="text-xl font-semibold text-gray-900">{product.name}</h1>
-            <div className="w-20"></div>
-          </div>
-        </div>
-      </header>
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <button
+            onClick={() => router.push('/products')}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
+          >
+            ← Back to Products
+          </button>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Product Images */}
           <div className="space-y-4">
-            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
               {product.images && product.images.length > 0 ? (
                 <img
                   src={product.images[0]}
@@ -179,6 +173,7 @@ export default function ProductDetail() {
                   🥬
                 </div>
               )}
+              {/* Removed overlay wishlist button to match new design */}
             </div>
             {product.images && product.images.length > 1 && (
               <div className="grid grid-cols-4 gap-2">
@@ -201,6 +196,13 @@ export default function ProductDetail() {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
               <p className="text-gray-600">{product.description}</p>
             </div>
+
+            {/* Wishlist button under product title/description for signed-in buyers (not the seller) */}
+            {user && user.id !== product.seller_id && (
+              <div>
+                <WishlistButton productId={product.id} size="default" showText />
+              </div>
+            )}
 
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <div className="grid grid-cols-2 gap-4">
@@ -308,8 +310,11 @@ export default function ProductDetail() {
                   View Seller Store
                 </button>
                 {sellerProfile?.phone && (
-                  <button className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                    📞 Contact
+                  <button
+                    onClick={() => setShowPhone(true)}
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    {showPhone ? `📞 ${sellerProfile.phone}` : 'View Contact'}
                   </button>
                 )}
               </div>

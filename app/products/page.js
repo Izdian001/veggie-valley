@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import WishlistButton from '@/components/ui/wishlist-button'
 
 export default function Products() {
   const router = useRouter()
@@ -10,17 +11,34 @@ export default function Products() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [categoriesMaster, setCategoriesMaster] = useState(['all'])
 
   useEffect(() => {
     loadProducts()
+    loadCategories()
   }, [])// Temporary auth check
   supabase.auth.getUser().then(({ data }) => console.log('Auth user:', data?.user)).catch(console.error)
+
+  const loadCategories = async () => {
+    try {
+      const { data } = await supabase
+        .from('categories')
+        .select('name')
+        .eq('is_active', true)
+        .order('name')
+      const names = (data || []).map(c => c.name).filter(Boolean)
+      setCategoriesMaster(['all', ...names])
+    } catch (e) {
+      console.warn('Could not load categories:', e?.message)
+      // Fallback: keep derived categories from products if needed
+    }
+  }
 
   const loadProducts = async () => {
     try {
       console.log('Loading products...')
       
-      // Get all visible products with seller information
+      // Get all visible products
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -33,8 +51,58 @@ export default function Products() {
         throw error
       }
       
-      console.log('Products loaded:', data)
-      setProducts(data || [])
+      // Batch-load related seller profiles and stores, and categories
+      const rawProducts = data || []
+      const sellerIds = Array.from(new Set(rawProducts.map(p => p.seller_id).filter(Boolean)))
+      const categoryIds = Array.from(new Set(rawProducts.map(p => p.category_id).filter(Boolean)))
+
+      let profilesMap = {}
+      let storesMap = {}
+      let categoriesMap = {}
+
+      if (sellerIds.length > 0) {
+        const [{ data: profilesData }, { data: storesData }] = await Promise.all([
+          supabase.from('profiles').select('id, full_name').in('id', sellerIds),
+          supabase.from('seller_profiles').select('id, farm_name').in('id', sellerIds)
+        ])
+
+        if (profilesData) {
+          profilesMap = profilesData.reduce((acc, row) => {
+            acc[row.id] = { full_name: row.full_name }
+            return acc
+          }, {})
+        }
+        if (storesData) {
+          storesMap = storesData.reduce((acc, row) => {
+            acc[row.id] = { farm_name: row.farm_name }
+            return acc
+          }, {})
+        }
+      }
+
+      if (categoryIds.length > 0) {
+        const { data: catsData } = await supabase
+          .from('categories')
+          .select('id, name')
+          .in('id', categoryIds)
+        if (catsData) {
+          categoriesMap = catsData.reduce((acc, row) => {
+            acc[row.id] = { name: row.name }
+            return acc
+          }, {})
+        }
+      }
+
+      const merged = rawProducts.map(p => ({
+        ...p,
+        // Attach under the keys already used by UI
+        profiles: profilesMap[p.seller_id] || null,
+        seller_profiles: storesMap[p.seller_id] || null,
+        categories: categoriesMap[p.category_id] || null
+      }))
+
+      console.log('Products loaded (merged):', merged)
+      setProducts(merged)
     } catch (error) {
       console.error('Error loading products:', error)
     } finally {
@@ -50,7 +118,7 @@ export default function Products() {
     return matchesSearch && matchesCategory
   })
 
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.categories?.name).filter(Boolean)))]
+  const categories = categoriesMaster
 
   if (loading) {
     return (
@@ -62,24 +130,11 @@ export default function Products() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-gray-900">Fresh Products</h1>
-            <div className="space-x-3">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
-              >
-                Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Fresh Products</h1>
+        </div>
         {/* Search and Filters */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -117,7 +172,7 @@ export default function Products() {
               key={product.id}
               className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow"
             >
-              <div className="aspect-square bg-gray-100 rounded-t-lg flex items-center justify-center">
+              <div className="aspect-square bg-gray-100 rounded-t-lg flex items-center justify-center relative">
                 {product.images && product.images.length > 0 ? (
                   <img
                     src={product.images[0]}
@@ -149,6 +204,9 @@ export default function Products() {
                 >
                   View Details
                 </button>
+                <div className="mt-2">
+                  <WishlistButton productId={product.id} size="default" showText />
+                </div>
               </div>
             </div>
           ))}
