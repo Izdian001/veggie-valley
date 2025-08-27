@@ -12,7 +12,7 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState(null)
   const [orderQuantity, setOrderQuantity] = useState(1)
-  const [placingOrder, setPlacingOrder] = useState(false)
+  const [addingToCart, setAddingToCart] = useState(false)
   const [sellerProfile, setSellerProfile] = useState(null)
   const [sellerStore, setSellerStore] = useState(null)
   const [showPhone, setShowPhone] = useState(false)
@@ -85,9 +85,9 @@ export default function ProductDetail() {
     }
   }
 
-  const handlePlaceOrder = async () => {
+  const handleAddToCart = async () => {
     if (!user) {
-      alert('Please sign in to place an order')
+      alert('Please sign in to add items to your cart')
       router.push('/auth')
       return
     }
@@ -102,43 +102,62 @@ export default function ProductDetail() {
       return
     }
 
-    setPlacingOrder(true)
+    setAddingToCart(true)
     try {
-      // Create order
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          buyer_id: user.id,
-          seller_id: product.seller_id,
-          product_id: product.id,
-          quantity: orderQuantity,
-          unit_price: product.price,
-          total_amount: product.price * orderQuantity,
-          status: 'pending',
-          order_date: new Date().toISOString()
-        })
-        .select()
-        .single()
+      // Find or create cart for this buyer
+      const { data: existingCart } = await supabase
+        .from('cart')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
 
-      if (orderError) throw orderError
+      let cartId = existingCart?.id
+      if (!cartId) {
+        const { data: newCart, error: cartErr } = await supabase
+          .from('cart')
+          .insert({ user_id: user.id })
+          .select('id')
+          .single()
+        if (cartErr) throw cartErr
+        cartId = newCart.id
+      }
 
-      // Update product quantity
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({
-          quantity_available: product.quantity_available - orderQuantity
-        })
-        .eq('id', product.id)
+      // See if this product already exists in cart_items
+      const { data: existingItem } = await supabase
+        .from('cart_items')
+        .select('id, quantity')
+        .eq('cart_id', cartId)
+        .eq('product_id', product.id)
+        .maybeSingle()
 
-      if (updateError) throw updateError
+      if (existingItem?.id) {
+        // Update quantity
+        const newQty = (existingItem.quantity || 0) + orderQuantity
+        const { error: updErr } = await supabase
+          .from('cart_items')
+          .update({ quantity: newQty })
+          .eq('id', existingItem.id)
+        if (updErr) throw updErr
+      } else {
+        // Insert new cart item
+        const { error: insErr } = await supabase
+          .from('cart_items')
+          .insert({
+            cart_id: cartId,
+            product_id: product.id,
+            quantity: orderQuantity
+          })
+        if (insErr) throw insErr
+      }
 
-      alert('Order placed successfully! The seller will be notified.')
-      router.push('/dashboard')
+      alert('Added to cart')
+      router.push('/products')
     } catch (error) {
-      console.error('Error placing order:', error)
-      alert('Error placing order. Please try again.')
+      console.error('Error adding to cart:', error)
+      const msg = error?.message || (typeof error === 'string' ? error : 'Unknown error')
+      alert(`Error adding to cart: ${msg}`)
     } finally {
-      setPlacingOrder(false)
+      setAddingToCart(false)
     }
   }
 
@@ -264,9 +283,9 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* Order Section */}
+            {/* Add to Cart Section */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Place Order</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add to Cart</h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -284,20 +303,12 @@ export default function ProductDetail() {
                     Min: {product.min_order_quantity} {product.unit} | Max: {product.quantity_available} {product.unit}
                   </p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-medium text-gray-900">Total Amount:</span>
-                    <span className="text-2xl font-bold text-green-600">
-                      ₹{(product.price * orderQuantity).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
                 <button
-                  onClick={handlePlaceOrder}
-                  disabled={placingOrder || orderQuantity < product.min_order_quantity || orderQuantity > product.quantity_available}
+                  onClick={handleAddToCart}
+                  disabled={addingToCart || orderQuantity < product.min_order_quantity || orderQuantity > product.quantity_available || (user && user.id === product.seller_id)}
                   className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
                 >
-                  {placingOrder ? 'Placing Order...' : 'Place Order'}
+                  {addingToCart ? 'Adding...' : 'Add to Cart'}
                 </button>
               </div>
             </div>
