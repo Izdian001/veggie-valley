@@ -69,23 +69,29 @@ export default function OrderDetailsPage({ params }) {
 
       setOrder(orderData)
 
-      // Fetch reviews for the order
-      const { data: reviewData, error: reviewError } = await supabase
+      // Fetch reviews for the seller (seller store level)
+      const { data: sellerReviewData, error: sellerReviewError } = await supabase
         .from('reviews')
         .select(`
           *,
           buyer_name:buyer_id ( full_name )
         `)
-        .eq('order_id', orderId)
+        .eq('seller_id', orderRow.seller_id)
         .order('created_at', { ascending: false })
 
-      if (reviewError) throw reviewError
+      if (sellerReviewError) throw sellerReviewError
 
-      setReviews(reviewData.map(r => ({...r, buyer_name: r.buyer_name.full_name})))
-      
-      // Check if the current user (buyer) has already reviewed
-      const userReview = reviewData.find(r => r.buyer_id === currentUser.id)
-      setHasReviewed(!!userReview)
+      setReviews((sellerReviewData || []).map(r => ({ ...r, buyer_name: r.buyer_name?.full_name })))
+
+      // Check if the current user (buyer) has already reviewed THIS order
+      const { data: existingOrderReview, error: existingErr } = await supabase
+        .from('reviews')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('buyer_id', currentUser.id)
+        .maybeSingle()
+      if (existingErr && existingErr.code !== 'PGRST116') throw existingErr
+      setHasReviewed(!!existingOrderReview)
 
     } catch (err) {
       setError(err.message)

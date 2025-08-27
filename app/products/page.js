@@ -63,7 +63,7 @@ export default function Products() {
       if (sellerIds.length > 0) {
         const [{ data: profilesData }, { data: storesData }] = await Promise.all([
           supabase.from('profiles').select('id, full_name').in('id', sellerIds),
-          supabase.from('seller_profiles').select('id, farm_name').in('id', sellerIds)
+          supabase.from('seller_profiles').select('id, farm_name, rating, total_reviews').in('id', sellerIds)
         ])
 
         if (profilesData) {
@@ -74,7 +74,7 @@ export default function Products() {
         }
         if (storesData) {
           storesMap = storesData.reduce((acc, row) => {
-            acc[row.id] = { farm_name: row.farm_name }
+            acc[row.id] = { farm_name: row.farm_name, rating: row.rating, total_reviews: row.total_reviews }
             return acc
           }, {})
         }
@@ -90,6 +90,41 @@ export default function Products() {
             acc[row.id] = { name: row.name }
             return acc
           }, {})
+        }
+      }
+
+      // Ensure we have ratings; if missing or zero in seller_profiles, compute from reviews as fallback
+      const sellersNeedingAgg = sellerIds.filter(id => {
+        const s = storesMap[id]
+        return !s || s.rating == null || s.total_reviews == null || s.total_reviews === 0
+      })
+
+      if (sellersNeedingAgg.length > 0) {
+        const { data: revs } = await supabase
+          .from('reviews')
+          .select('seller_id, rating')
+          .in('seller_id', sellersNeedingAgg)
+
+        if (revs && Array.isArray(revs)) {
+          const agg = {}
+          for (const r of revs) {
+            if (!r || !r.seller_id) continue
+            if (!agg[r.seller_id]) agg[r.seller_id] = { sum: 0, count: 0 }
+            const val = Number(r.rating) || 0
+            agg[r.seller_id].sum += val
+            agg[r.seller_id].count += 1
+          }
+          for (const sid of Object.keys(agg)) {
+            const a = agg[sid]
+            if (a.count > 0) {
+              const avg = Number((a.sum / a.count).toFixed(2))
+              storesMap[sid] = {
+                ...(storesMap[sid] || {}),
+                rating: avg,
+                total_reviews: a.count
+              }
+            }
+          }
         }
       }
 
@@ -197,6 +232,10 @@ export default function Products() {
                     </span>
                   </div>
                   <span className="text-sm text-gray-600">{product.seller_profiles?.farm_name || 'Local Farm'}</span>
+                </div>
+                <div className="flex items-center text-sm text-gray-600 mb-3">
+                  <span className="text-yellow-500 mr-1">⭐</span>
+                  <span>{Number(product.seller_profiles?.rating ?? 0).toFixed(1)}</span>
                 </div>
                 <button
                   onClick={() => router.push(`/products/${product.id}`)}

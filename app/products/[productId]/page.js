@@ -50,11 +50,31 @@ export default function ProductDetail() {
           .single()
         setSellerProfile(profile || null)
 
-        const { data: store } = await supabase
+        let store
+        const { data: storeRaw } = await supabase
           .from('seller_profiles')
           .select('farm_name, bio, years_farming, cover_image_url, rating, total_reviews')
           .eq('id', data.seller_id)
           .single()
+        store = storeRaw || null
+
+        // Fallback aggregation from reviews if rating is missing
+        if (!store || store.rating == null) {
+          const { data: revs } = await supabase
+            .from('reviews')
+            .select('rating')
+            .eq('seller_id', data.seller_id)
+
+          const count = (revs || []).length
+          const sum = (revs || []).reduce((acc, r) => acc + (Number(r.rating) || 0), 0)
+          const avg = count ? Number((sum / count).toFixed(2)) : null
+          store = {
+            ...(store || {}),
+            rating: avg,
+            total_reviews: count
+          }
+        }
+
         setSellerStore(store || null)
       }
     } catch (error) {
@@ -195,6 +215,10 @@ export default function ProductDetail() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
               <p className="text-gray-600">{product.description}</p>
+              <div className="flex items-center text-sm text-gray-600 mt-2">
+                <span className="text-yellow-500 mr-1">⭐</span>
+                <span>{Number(sellerStore?.rating ?? 0).toFixed(1)}</span>
+              </div>
             </div>
 
             {/* Wishlist button under product title/description for signed-in buyers (not the seller) */}

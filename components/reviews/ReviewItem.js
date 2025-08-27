@@ -1,8 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-
 function StarRating({ rating }) {
   return (
     <div className="flex items-center">
@@ -20,51 +17,7 @@ function StarRating({ rating }) {
   )
 }
 
-export default function ReviewItem({ review, onReplySubmitted }) {
-  const [showReplyForm, setShowReplyForm] = useState(false)
-  const [replyText, setReplyText] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [user, setUser] = useState(null)
-
-  useState(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-    }
-    getUser()
-  }, [])
-
-  const handleReplySubmit = async (e) => {
-    e.preventDefault()
-    if (!replyText.trim()) {
-      setError('Reply cannot be empty.')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-
-    try {
-      const { error: updateError } = await supabase
-        .from('reviews')
-        .update({
-          seller_reply: replyText.trim(),
-          seller_reply_date: new Date().toISOString()
-        })
-        .eq('id', review.id)
-
-      if (updateError) throw updateError
-
-      setReplyText('')
-      setShowReplyForm(false)
-      onReplySubmitted()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+export default function ReviewItem({ review }) {
 
   return (
     <div className="p-4 border-b border-gray-200">
@@ -101,38 +54,7 @@ export default function ReviewItem({ review, onReplySubmitted }) {
         </div>
       )}
 
-      {/* Reply Button & Form for Seller */}
-      {user?.id === review.seller_id && !review.seller_reply && (
-        <div className="mt-4 ml-14">
-          <button
-            onClick={() => setShowReplyForm(!showReplyForm)}
-            className="text-sm font-medium text-green-600 hover:text-green-700"
-          >
-            {showReplyForm ? 'Cancel' : 'Reply to this review'}
-          </button>
-
-          {showReplyForm && (
-            <form onSubmit={handleReplySubmit} className="mt-4 space-y-3">
-              <textarea
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="Write your reply..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                rows={3}
-                maxLength={500}
-              />
-              {error && <p className="text-red-600 text-sm">{error}</p>}
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-              >
-                {loading ? 'Submitting...' : 'Submit Reply'}
-              </button>
-            </form>
-          )}
-        </div>
-      )}
+      {/* Seller reply UI removed; existing replies still shown above */}
     </div>
   )
 }

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import ReviewList from '@/components/reviews/ReviewList'
 
 export default function SellerDashboard() {
   const router = useRouter()
@@ -11,6 +12,9 @@ export default function SellerDashboard() {
   const [baseProfile, setBaseProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
+  const [reviews, setReviews] = useState([])
+  const [ratingAvg, setRatingAvg] = useState(null)
+  const [reviewCount, setReviewCount] = useState(0)
 
   useEffect(() => {
     checkUser()
@@ -24,6 +28,37 @@ export default function SellerDashboard() {
       router.push('/auth')
       return
     }
+
+  const fetchSellerReviews = async (sellerId) => {
+    // Fetch reviews for this seller
+    const { data, error } = await supabase
+      .from('reviews')
+      .select(`
+        *,
+        buyer_name:buyer_id ( full_name )
+      `)
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: false })
+
+    if (!error) {
+      const normalized = (data || []).map(r => ({ ...r, buyer_name: r.buyer_name?.full_name }))
+      setReviews(normalized)
+      // Compute aggregates client-side as fallback
+      const cnt = normalized.length
+      const avg = cnt ? normalized.reduce((s, r) => s + (r.rating || 0), 0) / cnt : 0
+      setReviewCount(cnt)
+      setRatingAvg(Number(avg.toFixed(2)))
+
+      // Persist aggregates so buyers can read from seller_profiles without needing reviews access
+      try {
+        await supabase
+          .from('seller_profiles')
+          .upsert({ id: sellerId, rating: Number(avg.toFixed(2)), total_reviews: cnt }, { onConflict: 'id' })
+      } catch (persistErr) {
+        console.warn('Failed to persist rating aggregate to seller_profiles', persistErr)
+      }
+    }
+  }
     setUser(user)
     
     // Get base profile
@@ -46,6 +81,9 @@ export default function SellerDashboard() {
 
     // Load initial pending orders count
     fetchPendingCount(user.id)
+
+    // Load seller reviews/aggregates
+    fetchSellerReviews(user.id)
 
     // Realtime updates for orders belonging to this seller
     const channel = supabase
@@ -166,16 +204,7 @@ export default function SellerDashboard() {
                     <p className="text-gray-900">{baseProfile.phone}</p>
                   </div>
                 )}
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Rating:</span>
-                  <p className="text-gray-900">{profile.rating || 0} ⭐ ({profile.total_reviews || 0} reviews)</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Status:</span>
-                  <p className="text-sm font-medium text-green-600">
-                    ✅ Approved
-                  </p>
-                </div>
+                {/* Rating and Status removed per request */}
               </div>
             </div>
 
@@ -185,6 +214,11 @@ export default function SellerDashboard() {
             </div>
           </div>
         )}
+
+        {/* Reviews Section (heading and refresh removed, ReviewList shows its own heading) */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <ReviewList reviews={reviews} onReplySubmitted={() => fetchSellerReviews(user.id)} />
+        </div>
 
         {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow p-6">

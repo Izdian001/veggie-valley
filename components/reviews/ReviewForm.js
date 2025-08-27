@@ -28,8 +28,6 @@ export default function ReviewForm({ order, onReviewSubmitted }) {
           order_id: order.id,
           buyer_id: user.id,
           seller_id: order.seller_id,
-          product_id: order.product_id,
-          reviewer_id: user.id,
           rating,
           review_text: reviewText.trim() || null
         })

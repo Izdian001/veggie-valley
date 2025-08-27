@@ -164,15 +164,7 @@ export default function BuyerDashboard() {
 
 
 
-        {/* Recent Activity */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-          <div className="text-center py-8">
-            <div className="text-4xl mb-4">📋</div>
-            <p className="text-gray-600">No recent orders yet</p>
-            <p className="text-sm text-gray-500">Start shopping to see your order history here</p>
-          </div>
-        </div>
+        {/* Recent Activity removed per request */}
       </div>
     </div>
   )

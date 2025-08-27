@@ -169,7 +169,7 @@ export default function SellerStore() {
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-green-600">
-                    {((ratingAvg ?? seller.seller_profiles?.rating ?? 0)).toFixed(1)} ⭐
+                    {Number((seller.seller_profiles?.rating ?? (ratingAvg ?? 0))).toFixed(1)} ⭐
                   </p>
                   <p className="text-sm text-gray-500">Rating</p>
                 </div>

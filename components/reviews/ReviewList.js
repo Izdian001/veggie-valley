@@ -6,7 +6,7 @@ export default function ReviewList({ reviews, onReplySubmitted }) {
   if (!reviews || reviews.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-600">No reviews yet for this product.</p>
+        <p className="text-gray-600">No reviews yet for this seller.</p>
       </div>
     )
   }
