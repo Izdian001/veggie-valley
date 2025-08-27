@@ -1,75 +1,71 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
-import ReviewForm from '@/components/reviews/ReviewForm'
-import ReviewList from '@/components/reviews/ReviewList'
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+import ReviewForm from '@/components/reviews/ReviewForm';
+import ReviewList from '@/components/reviews/ReviewList';
 
 export default function OrderDetailsPage({ params }) {
-  const router = useRouter()
-  const { orderId } = params
-  const [order, setOrder] = useState(null)
-  const [reviews, setReviews] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [user, setUser] = useState(null)
-  const [hasReviewed, setHasReviewed] = useState(false)
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const paymentStatus = searchParams.get('payment');
+  const { orderId } = params;
+  const [order, setOrder] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [user, setUser] = useState(null);
+  const [hasReviewed, setHasReviewed] = useState(false);
 
   const fetchOrderAndReviews = useCallback(async (currentUser) => {
-    setLoading(true)
-    setError('')
+    setLoading(true);
+    setError('');
     try {
-      // 1) Fetch order row (no joins to avoid null/400s)
       const { data: orderRow, error: orderError } = await supabase
         .from('orders')
         .select('*')
         .eq('id', orderId)
-        .single()
+        .single();
 
-      if (orderError) throw orderError
+      if (orderError) throw orderError;
 
-      // Security: ensure user is part of the order
       if (currentUser.id !== orderRow.buyer_id && currentUser.id !== orderRow.seller_id) {
-        throw new Error('You are not authorized to view this order.')
+        throw new Error('You are not authorized to view this order.');
       }
 
-      // 2) Fetch related profiles in one call
-      const ids = [orderRow.buyer_id, orderRow.seller_id].filter(Boolean)
-      let buyerProfile = null
-      let sellerProfile = null
+      const ids = [orderRow.buyer_id, orderRow.seller_id].filter(Boolean);
+      let buyerProfile = null;
+      let sellerProfile = null;
       if (ids.length) {
         const { data: profilesData, error: profilesError } = await supabase
           .from('profiles')
           .select('id, full_name, address, phone')
-          .in('id', ids)
-        if (profilesError) throw profilesError
-        buyerProfile = profilesData.find(p => p.id === orderRow.buyer_id) || null
-        sellerProfile = profilesData.find(p => p.id === orderRow.seller_id) || null
+          .in('id', ids);
+        if (profilesError) throw profilesError;
+        buyerProfile = profilesData.find(p => p.id === orderRow.buyer_id) || null;
+        sellerProfile = profilesData.find(p => p.id === orderRow.seller_id) || null;
       }
 
-      // 3) Fetch product info
-      let productInfo = null
+      let productInfo = null;
       if (orderRow.product_id) {
         const { data: prod, error: prodErr } = await supabase
           .from('products')
           .select('id, name, unit, price')
           .eq('id', orderRow.product_id)
-          .single()
-        if (!prodErr) productInfo = prod
+          .single();
+        if (!prodErr) productInfo = prod;
       }
 
-      // Compose order object with nested info
       const orderData = {
         ...orderRow,
         seller: sellerProfile,
         buyer: buyerProfile,
         product: productInfo
-      }
+      };
 
-      setOrder(orderData)
+      setOrder(orderData);
 
-      // Fetch reviews for the order
       const { data: reviewData, error: reviewError } = await supabase
         .from('reviews')
         .select(`
@@ -77,50 +73,67 @@ export default function OrderDetailsPage({ params }) {
           buyer_name:buyer_id ( full_name )
         `)
         .eq('order_id', orderId)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false });
 
-      if (reviewError) throw reviewError
+      if (reviewError) throw reviewError;
 
-      setReviews(reviewData.map(r => ({...r, buyer_name: r.buyer_name.full_name})))
-      
-      // Check if the current user (buyer) has already reviewed
-      const userReview = reviewData.find(r => r.buyer_id === currentUser.id)
-      setHasReviewed(!!userReview)
+      setReviews(reviewData.map(r => ({ ...r, buyer_name: r.buyer_name.full_name })));
+
+      const userReview = reviewData.find(r => r.buyer_id === currentUser.id);
+      setHasReviewed(!!userReview);
 
     } catch (err) {
-      setError(err.message)
-      console.error('Error fetching order details:', err)
+      setError(err.message);
+      console.error('Error fetching order details:', err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [orderId])
+  }, [orderId]);
 
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        router.push('/auth')
-        return
+        router.push('/auth');
+        return;
       }
-      setUser(user)
-      fetchOrderAndReviews(user)
-    }
-    getCurrentUser()
-  }, [router, fetchOrderAndReviews])
+      setUser(user);
+      fetchOrderAndReviews(user);
+    };
+    getCurrentUser();
+  }, [router, fetchOrderAndReviews]);
 
   const handleReviewSubmitted = () => {
-    // Refetch reviews after submission
     if (user) {
-      fetchOrderAndReviews(user)
+      fetchOrderAndReviews(user);
     }
-  }
+  };
+
+  const handlePayment = async () => {
+    try {
+      const response = await fetch('/api/payment/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, total: order.total_price || (order.product?.price * order.quantity) }),
+      });
+      const { GatewayPageURL } = await response.json();
+      if (GatewayPageURL) {
+        window.location.href = GatewayPageURL;
+      } else {
+        alert('Payment initiation failed.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error initiating payment.');
+    }
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -128,7 +141,7 @@ export default function OrderDetailsPage({ params }) {
       <div className="min-h-screen flex items-center justify-center text-red-600">
         <p>Error: {error}</p>
       </div>
-    )
+    );
   }
 
   if (!order) {
@@ -136,12 +149,11 @@ export default function OrderDetailsPage({ params }) {
       <div className="min-h-screen flex items-center justify-center text-gray-600">
         <p>Order not found.</p>
       </div>
-    )
+    );
   }
 
-  const isBuyer = user?.id === order.buyer_id
-  // Allow review regardless of delivery status
-  const canReview = isBuyer && !hasReviewed
+  const isBuyer = user?.id === order.buyer_id;
+  const canReview = isBuyer && !hasReviewed;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -156,7 +168,29 @@ export default function OrderDetailsPage({ params }) {
           <h1 className="text-3xl font-bold text-gray-900">Order Details</h1>
           <div className="w-16" />
         </div>
-        
+
+        {/* Payment Feedback */}
+        {paymentStatus === 'success' && (
+          <div className="bg-green-100 text-green-800 p-4 rounded mb-4">
+            Payment successful! Order status updated.
+          </div>
+        )}
+        {paymentStatus === 'fail' && (
+          <div className="bg-red-100 text-red-800 p-4 rounded mb-4">
+            Payment failed. Please try again.
+          </div>
+        )}
+        {paymentStatus === 'cancel' && (
+          <div className="bg-yellow-100 text-yellow-800 p-4 rounded mb-4">
+            Payment cancelled.
+          </div>
+        )}
+        {paymentStatus === 'error' && (
+          <div className="bg-red-100 text-red-800 p-4 rounded mb-4">
+            An error occurred during payment processing.
+          </div>
+        )}
+
         {/* Order Info */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Order #{order.id.substring(0, 8)}</h2>
@@ -166,7 +200,15 @@ export default function OrderDetailsPage({ params }) {
             <div><p><strong>Seller:</strong> {order.seller?.full_name || 'Not provided'}</p></div>
             <div><p><strong>Buyer:</strong> {order.buyer?.full_name || 'Not provided'}</p></div>
           </div>
-          <div className="mt-6">
+          <div className="mt-6 space-y-4">
+            {isBuyer && order.status === 'pending' && (
+              <button
+                onClick={handlePayment}
+                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
+              >
+                Make Payment
+              </button>
+            )}
             <button
               onClick={() => router.push(`/orders/${order.id}/chat`)}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
@@ -192,5 +234,5 @@ export default function OrderDetailsPage({ params }) {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
