@@ -10,6 +10,7 @@ export default function SellerDashboard() {
   const [profile, setProfile] = useState(null)
   const [baseProfile, setBaseProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
     checkUser()
@@ -42,6 +43,35 @@ export default function SellerDashboard() {
     setBaseProfile(baseProfile)
     setProfile(sellerProfile)
     setLoading(false)
+
+    // Load initial pending orders count
+    fetchPendingCount(user.id)
+
+    // Realtime updates for orders belonging to this seller
+    const channel = supabase
+      .channel(`orders-seller-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `seller_id=eq.${user.id}` },
+        () => {
+          fetchPendingCount(user.id)
+        }
+      )
+      .subscribe()
+
+    // Cleanup
+    return () => {
+      try { supabase.removeChannel(channel) } catch {}
+    }
+  }
+
+  const fetchPendingCount = async (sellerId) => {
+    const { count, error } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', sellerId)
+      .eq('status', 'pending')
+    if (!error && typeof count === 'number') setPendingCount(count)
   }
 
   const handleSignOut = async () => {
@@ -180,8 +210,14 @@ export default function SellerDashboard() {
 
             <button
               onClick={() => router.push('/seller/orders')}
-              className="p-4 border-2 border-dashed border-purple-300 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-all text-center"
+              className="relative p-4 border-2 border-dashed border-purple-300 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-all text-center"
             >
+              {/* Notification badge */}
+              {pendingCount > 0 && (
+                <span className="absolute -top-2 -right-2 inline-flex items-center justify-center px-2 min-w-[1.5rem] h-6 text-xs font-bold leading-none text-white bg-red-600 rounded-full shadow">
+                  {pendingCount}
+                </span>
+              )}
               <div className="text-2xl mb-2">📋</div>
               <h4 className="font-medium text-gray-900">View Orders</h4>
               <p className="text-sm text-gray-600">Check customer orders</p>
