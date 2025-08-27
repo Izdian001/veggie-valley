@@ -7,8 +7,8 @@ import SignOutControl from '@/components/auth/SignOutControl'
 export default function Header() {
   const pathname = usePathname()
 
-  // Hide header on the home page
-  if (pathname === '/') return null
+  // Hide header on the home page and auth routes
+  if (pathname === '/' || pathname.startsWith('/auth')) return null
 
   return (
     <header className="bg-white border-b">
