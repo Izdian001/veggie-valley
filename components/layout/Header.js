@@ -10,6 +10,20 @@ export default function Header() {
   // Hide header on the home page and auth routes
   if (pathname === '/' || pathname.startsWith('/auth')) return null
 
+  // On seller routes, show only the Veggie Valley brand (no right-side nav)
+  if (pathname.startsWith('/seller')) {
+    return (
+      <header className="bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex items-center justify-between py-4">
+            <Link href="/" className="text-lg font-semibold text-green-700">Veggie Valley</Link>
+            <div />
+          </nav>
+        </div>
+      </header>
+    )
+  }
+
   return (
     <header className="bg-white border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
