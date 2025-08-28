@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import WishlistButton from '@/components/ui/wishlist-button'
+import { formatBDT } from '@/lib/currency'
 
 export default function ProductDetail() {
   const router = useRouter()
@@ -251,7 +252,7 @@ export default function ProductDetail() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Price</p>
-                  <p className="text-2xl font-bold text-green-600">₹{product.price}/{product.unit}</p>
+                  <p className="text-2xl font-bold text-green-600">{formatBDT(product.price)}/{product.unit}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Available</p>

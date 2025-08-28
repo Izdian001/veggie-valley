@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { formatBDT } from '@/lib/currency'
 
 export default function CartPage() {
   const router = useRouter()
@@ -205,7 +206,7 @@ export default function CartPage() {
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-gray-900">{it.product?.name || 'Product'}</p>
-                    <p className="text-sm text-gray-500">₹{(it.product?.price ?? 0)}/{it.product?.unit || 'unit'}</p>
+                    <p className="text-sm text-gray-500">{formatBDT(it.product?.price ?? 0)}/{it.product?.unit || 'unit'}</p>
                     <div className="mt-2 flex items-center gap-4">
                       <span className="text-sm text-gray-600">Quantity: {it.quantity}</span>
                       <button
@@ -219,7 +220,7 @@ export default function CartPage() {
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-gray-900">
-                      ₹{(((it.product?.price ?? 0) * (it.quantity || 0))).toFixed(2)}
+                      {formatBDT(((it.product?.price ?? 0) * (it.quantity || 0)))}
                     </p>
                   </div>
                 </div>
@@ -234,7 +235,7 @@ export default function CartPage() {
                 </div>
                 <div className="flex justify-between text-base font-semibold text-gray-900 border-t pt-3 mt-3">
                   <span>Total</span>
-                  <span>₹{total.toFixed(2)}</span>
+                  <span>{formatBDT(total)}</span>
                 </div>
                 <button
                   onClick={proceedToPayment}

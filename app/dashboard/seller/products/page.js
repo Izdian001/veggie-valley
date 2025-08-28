@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { formatBDT } from '@/lib/currency'
 import { useRouter } from 'next/navigation'
 
 export default function SellerProductsPage() {
@@ -55,7 +56,7 @@ export default function SellerProductsPage() {
               >
                 <span className="text-xl font-bold">{product.name}</span>
                 <span>{product.description}</span>
-                <span className="font-semibold text-green-800">${product.price}</span>
+                <span className="font-semibold text-green-800">{formatBDT(product.price)}</span>
                 <span className="text-sm text-gray-500">Status: {product.status}</span>
                 {/* TODO: edit/delete buttons can be added */}
               </li>

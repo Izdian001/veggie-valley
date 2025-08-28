@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { wishlistUtils } from '@/lib/wishlistUtils';
 import WishlistButton from '@/components/ui/wishlist-button';
 import Link from 'next/link';
+import { formatBDT } from '@/lib/currency';
 
 export default function WishlistPage() {
   const router = useRouter();
@@ -152,7 +153,7 @@ export default function WishlistPage() {
                   </div>
                   <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-lg font-bold text-green-600">₹{product.price}/{product.unit}</span>
+                    <span className="text-lg font-bold text-green-600">{formatBDT(product.price)}/{product.unit}</span>
                     <span className="text-sm text-gray-500">{product.quantity_available} available</span>
                   </div>
                   
@@ -232,9 +233,7 @@ export default function WishlistPage() {
                 <div className="text-sm text-gray-500">Available Items</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  ₹{wishlistProducts.reduce((sum, p) => sum + (p.price || 0), 0).toFixed(2)}
-                </div>
+                <div className="text-2xl font-bold text-green-600">{formatBDT(wishlistProducts.reduce((sum, p) => sum + (p.price || 0), 0))}</div>
                 <div className="text-sm text-gray-500">Total Value (approx.)</div>
               </div>
             </div>

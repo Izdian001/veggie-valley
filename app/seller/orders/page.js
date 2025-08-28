@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { formatBDT } from '@/lib/currency'
 
 export default function SellerOrders() {
   const router = useRouter()
@@ -256,11 +257,11 @@ export default function SellerOrders() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Unit Price:</span>
-                          <span className="font-medium">₹{order.unit_price}</span>
+                          <span className="font-medium">{formatBDT(order.unit_price)}</span>
                         </div>
                         <div className="flex justify-between border-t pt-2">
                           <span className="text-gray-900 font-medium">Total Amount:</span>
-                          <span className="text-green-600 font-bold">₹{order.total_amount}</span>
+                          <span className="text-green-600 font-bold">{formatBDT(order.total_amount)}</span>
                         </div>
                       </div>
                     </div>

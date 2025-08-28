@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import WishlistButton from '@/components/ui/wishlist-button'
+import { formatBDT } from '@/lib/currency'
 
 export default function Products() {
   const router = useRouter()
@@ -222,7 +223,7 @@ export default function Products() {
                 <h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
                 <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-lg font-bold text-green-600">₹{product.price}/{product.unit}</span>
+                  <span className="text-lg font-bold text-green-600">{formatBDT(product.price)}/{product.unit}</span>
                   <span className="text-sm text-gray-500">{product.quantity_available} available</span>
                 </div>
                 <div className="flex items-center space-x-2 mb-3">

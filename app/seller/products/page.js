@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { formatBDT } from '@/lib/currency'
 
 export default function SellerProducts() {
   const router = useRouter()
@@ -371,7 +372,7 @@ export default function SellerProducts() {
                               <div>
                                 <span className="font-medium text-gray-500">Price:</span>
                                 <span className="ml-1 text-gray-900">
-                                  ${product.price}/{product.unit}
+                                  {formatBDT(product.price)}/{product.unit}
                                 </span>
                               </div>
                               <div>

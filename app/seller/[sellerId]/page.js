@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { formatBDT } from '@/lib/currency'
 
 export default function SellerStore() {
   const router = useRouter()
@@ -221,7 +222,7 @@ export default function SellerStore() {
                   <h4 className="font-semibold text-gray-900 mb-2">{product.name}</h4>
                   <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
                   <div className="flex items-center justify-between">
-                    <span className="text-lg font-bold text-green-600">₹{product.price}/{product.unit}</span>
+                    <span className="text-lg font-bold text-green-600">{formatBDT(product.price)}/{product.unit}</span>
                     <span className="text-sm text-gray-500">{product.quantity_available} available</span>
                   </div>
                 </div>
