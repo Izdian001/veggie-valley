@@ -92,36 +92,25 @@ export default function WishlistPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-gray-900">My Wishlist</h1>
-              {wishlistProducts.length > 0 && (
-                <span className="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
-                  {wishlistProducts.length} item{wishlistProducts.length !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-            <div className="space-x-3">
-              <Link
-                href="/products"
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
-              >
-                Browse Products
-              </Link>
-              <Link
-                href="/dashboard"
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
-              >
-                Dashboard
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page heading bar */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">My Wishlist</h1>
+            {wishlistProducts.length > 0 && (
+              <span className="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+                {wishlistProducts.length} item{wishlistProducts.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <Link
+            href="/products"
+            className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+          >
+            Browse Products
+          </Link>
+        </div>
         {wishlistProducts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {wishlistProducts.map((product) => (
@@ -217,28 +206,6 @@ export default function WishlistPage() {
           </div>
         )}
 
-        {/* Quick stats */}
-        {wishlistProducts.length > 0 && (
-          <div className="mt-12 bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Wishlist Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{wishlistProducts.length}</div>
-                <div className="text-sm text-gray-500">Items in Wishlist</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  {wishlistProducts.filter(p => p.quantity_available > 0).length}
-                </div>
-                <div className="text-sm text-gray-500">Available Items</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{formatBDT(wishlistProducts.reduce((sum, p) => sum + (p.price || 0), 0))}</div>
-                <div className="text-sm text-gray-500">Total Value (approx.)</div>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
