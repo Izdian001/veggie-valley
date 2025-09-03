@@ -226,6 +226,7 @@ export default function NewProductPage() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                 >
                   <option value="kg">Kilogram (kg)</option>
+                  <option value="litre">Litre (L)</option>
                   <option value="g">Gram (g)</option>
                   <option value="lb">Pound (lb)</option>
                   <option value="piece">Piece</option>
