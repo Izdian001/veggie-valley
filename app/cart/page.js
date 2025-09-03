@@ -153,54 +153,107 @@ export default function CartPage() {
   const proceedToPayment = async () => {
     try {
       if (!user) {
-        router.push('/auth')
-        return
+        router.push('/auth');
+        return;
       }
       if (items.length === 0) {
-        alert('Your cart is empty.')
-        return
-      }
-      const first = items[0]
-      const product = first.product
-      if (!product?.seller_id) {
-        alert('Unable to determine seller for this product.')
-        return
+        alert('Your cart is empty.');
+        return;
       }
 
-      // Create a minimal order for demo
-      const payload = {
-        buyer_id: user.id,
-        seller_id: product.seller_id,
-        product_id: product.id,
-        quantity: first.quantity || 1,
-        unit_price: Number(product.price || 0),
-        total_amount: Number(product.price || 0) * Number(first.quantity || 1),
-        status: 'pending'
-      }
+      // Get user's address
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('address, phone')
+        .eq('id', user.id)
+        .single();
 
-      const { data: order, error } = await supabase
-        .from('orders')
-        .insert(payload)
-        .select('*')
-        .single()
-      if (error) throw error
+      const deliveryAddress = userProfile?.address || 'Default Delivery Address';
+      const phone = userProfile?.phone || '';
 
-      // Notify seller that a new order has been placed (demo notification)
-      await supabase
-        .from('messages')
-        .insert({
+      // Group items by seller
+      const itemsBySeller = {};
+      items.forEach(item => {
+        if (!item.product?.seller_id) return;
+        if (!itemsBySeller[item.product.seller_id]) {
+          itemsBySeller[item.product.seller_id] = [];
+        }
+        itemsBySeller[item.product.seller_id].push(item);
+      });
+
+      // Create orders for each seller
+      const orderPromises = Object.entries(itemsBySeller).map(async ([sellerId, sellerItems]) => {
+        // Calculate order total
+        const orderTotal = sellerItems.reduce((sum, item) => {
+          return sum + (Number(item.product?.price || 0) * Number(item.quantity || 0));
+        }, 0);
+
+        // Create the order
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            buyer_id: user.id,
+            seller_id: sellerId,
+            status: 'pending',
+            total_amount: orderTotal,
+            order_date: new Date().toISOString(),
+            delivery_address: deliveryAddress,
+            phone: phone,
+            payment_status: 'pending'
+          })
+          .select('*')
+          .single();
+
+        if (orderError) throw orderError;
+
+        // Prepare order items
+        const orderItems = sellerItems.map(item => ({
+          order_id: order.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: Number(item.product?.price || 0),
+        }));
+
+        // Add order items
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(orderItems);
+
+        if (itemsError) throw itemsError;
+
+        // Notify seller
+        await supabase.from('messages').insert({
           order_id: order.id,
           sender_id: user.id,
-          receiver_id: product.seller_id,
-          message_text: `New order created (demo): ${product.name} x ${first.quantity}`
-        })
+          receiver_id: sellerId,
+          message_text: `New order #${order.id} has been placed with ${sellerItems.length} item(s)`,
+          created_at: new Date().toISOString()
+        });
 
-      router.push(`/orders/${order.id}/pay`)
+        return order;
+      });
+
+      // Wait for all orders to be created
+      const orders = await Promise.all(orderPromises);
+      
+      if (orders.length === 0) {
+        throw new Error('No valid items to order');
+      }
+
+      // Clear the cart after successful order creation
+      await supabase
+        .from('cart_items')
+        .delete()
+        .eq('cart_id', cartId);
+
+      // Redirect to the first order's payment page
+      router.push(`/orders/${orders[0].id}/pay`);
+
     } catch (e) {
-      console.error('Failed to proceed to payment', e)
-      alert(e?.message || 'Failed to proceed to payment')
+      console.error('Failed to proceed to payment', e);
+      alert(e.message || 'Failed to create order. Please try again.');
     }
-  }
+  };
 
   if (loading) {
     return (
