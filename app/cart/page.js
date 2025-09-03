@@ -11,343 +11,222 @@ export default function CartPage() {
   const [role, setRole] = useState(null)
   const [loading, setLoading] = useState(true)
   const [cartId, setCartId] = useState(null)
-  const [items, setItems] = useState([]) // [{ id, product_id, quantity, unit_price, product: {...} }]
+  const [items, setItems] = useState([])
   const [updating, setUpdating] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  // Get or create cart for the user
+  const getOrCreateCart = async (userId) => {
+    // Check for existing cart
+    const { data: existingCart } = await supabase
+      .from('cart')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (existingCart) {
+      return existingCart.id
+    }
+
+    // Create new cart if none exists
+    const { data: newCart, error } = await supabase
+      .from('cart')
+      .insert({ user_id: userId })
+      .select('id')
+      .single()
+
+    if (error) throw error
+    return newCart.id
+  }
+
+  // Load cart items
+  const loadCartItems = async (cartId) => {
+    const { data: cartItems, error } = await supabase
+      .from('cart_items')
+      .select(`
+        id,
+        product_id,
+        quantity,
+        products (
+          id,
+          name,
+          price,
+          images,
+          stock_quantity,
+          seller_id
+        )
+      `)
+      .eq('cart_id', cartId)
+
+    if (error) throw error
+    return cartItems || []
+  }
 
   useEffect(() => {
     const init = async () => {
       try {
         const { data: auth } = await supabase.auth.getUser()
         const me = auth?.user || null
+        
         if (!me) {
           router.push('/auth')
           return
         }
+
         setUser(me)
 
-        // fetch role to ensure buyer-only access (best-effort)
-        try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', me.id)
-            .maybeSingle()
-          setRole(profile?.role || null)
-          if (profile?.role && profile.role !== 'buyer') {
-            router.push('/dashboard')
-            return
-          }
-        } catch (e) {
-          // If profiles are protected by RLS, don't block cart; treat as buyer by default
-          console.warn('Could not load profile role; proceeding as buyer')
-        }
+        // Get or create cart
+        const cartId = await getOrCreateCart(me.id)
+        setCartId(cartId)
 
-        // Find or create cart
-        let cid = null
-        const { data: existingCart, error: cartSelErr } = await supabase
-          .from('cart')
-          .select('id')
-          .eq('user_id', me.id)
-          .maybeSingle()
-        // If select failed due to RLS or not found, try to create the cart instead of failing hard
-        cid = existingCart?.id || null
-        if (!cid) {
-          const { data: newCart, error: cartInsErr } = await supabase
-            .from('cart')
-            .insert({ user_id: me.id })
-            .select('id')
-            .single()
-          if (cartInsErr) throw cartInsErr
-          cid = newCart.id
-        }
-        setCartId(cid)
+        // Load cart items
+        const cartItems = await loadCartItems(cartId)
+        setItems(cartItems)
 
-        await loadItems(cid)
-      } catch (e) {
-        console.error('Error initializing cart page', e)
-        setErrorMsg(e?.message || 'Failed to load cart')
+      } catch (error) {
+        console.error('Error initializing cart:', error)
+        setErrorMsg('Failed to load cart')
       } finally {
         setLoading(false)
       }
     }
+
     init()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [router])
 
-  const loadItems = async (cid) => {
-    try {
-      const { data: rows, error } = await supabase
-        .from('cart_items')
-        .select('id, product_id, quantity')
-        .eq('cart_id', cid)
-      if (error) throw error
-
-      const productIds = [...new Set((rows || []).map(r => r.product_id))]
-      let productsMap = {}
-      if (productIds.length > 0) {
-        const { data: prods, error: prodErr } = await supabase
-          .from('products')
-          .select('id, name, price, unit, images, seller_id')
-          .in('id', productIds)
-        if (prodErr) throw prodErr
-        productsMap = (prods || []).reduce((acc, p) => {
-          acc[p.id] = p
-          return acc
-        }, {})
-      }
-
-      const enriched = (rows || []).map(r => ({
-        ...r,
-        product: productsMap[r.product_id] || null,
-      }))
-      setItems(enriched)
-      setErrorMsg('')
-    } catch (e) {
-      console.error('Failed to load items', e)
-      setItems([])
-      setErrorMsg(e?.message || 'Failed to load cart items')
-    }
-  }
-
-  const total = useMemo(() => {
-    return items.reduce((sum, it) => sum + (Number(it.product?.price || 0) * (it.quantity || 0)), 0)
-  }, [items])
-
-  const updateQuantity = async (itemId, newQty) => {
-    if (newQty <= 0) return
+  // Update item quantity
+  const updateQuantity = async (itemId, newQuantity) => {
+    if (newQuantity < 1) return
+    
     setUpdating(true)
     try {
       const { error } = await supabase
         .from('cart_items')
-        .update({ quantity: newQty })
+        .update({ quantity: newQuantity })
         .eq('id', itemId)
+
       if (error) throw error
-      setItems(prev => prev.map(it => it.id === itemId ? { ...it, quantity: newQty } : it))
-    } catch (e) {
-      console.error('Failed to update quantity', e)
+
+      // Update local state
+      setItems(items.map(item => 
+        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      ))
+
+    } catch (error) {
+      console.error('Error updating quantity:', error)
       alert('Failed to update quantity')
     } finally {
       setUpdating(false)
     }
   }
 
+  // Remove item from cart
   const removeItem = async (itemId) => {
     if (!confirm('Remove this item from your cart?')) return
+    
     setUpdating(true)
     try {
       const { error } = await supabase
         .from('cart_items')
         .delete()
         .eq('id', itemId)
+
       if (error) throw error
-      setItems(prev => prev.filter(it => it.id !== itemId))
-    } catch (e) {
-      console.error('Failed to remove item', e)
+
+      // Update local state
+      setItems(items.filter(item => item.id !== itemId))
+
+    } catch (error) {
+      console.error('Error removing item:', error)
       alert('Failed to remove item')
     } finally {
       setUpdating(false)
     }
   }
 
-  const proceedToPayment = async () => {
-    try {
-      if (!user) {
-        router.push('/auth');
-        return;
-      }
-      if (items.length === 0) {
-        alert('Your cart is empty.');
-        return;
-      }
+  // Calculate total
+  const total = useMemo(() => {
+    return items.reduce((sum, item) => {
+      return sum + (Number(item.products?.price || 0) * item.quantity)
+    }, 0)
+  }, [items])
 
-      // Get user's address
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('address, phone')
-        .eq('id', user.id)
-        .single();
-
-      const deliveryAddress = userProfile?.address || 'Default Delivery Address';
-      const phone = userProfile?.phone || '';
-
-      // Group items by seller
-      const itemsBySeller = {};
-      items.forEach(item => {
-        if (!item.product?.seller_id) return;
-        if (!itemsBySeller[item.product.seller_id]) {
-          itemsBySeller[item.product.seller_id] = [];
-        }
-        itemsBySeller[item.product.seller_id].push(item);
-      });
-
-      // Create orders for each seller
-      const orderPromises = Object.entries(itemsBySeller).map(async ([sellerId, sellerItems]) => {
-        // Calculate order total
-        const orderTotal = sellerItems.reduce((sum, item) => {
-          return sum + (Number(item.product?.price || 0) * Number(item.quantity || 0));
-        }, 0);
-
-        // Create the order
-        const { data: order, error: orderError } = await supabase
-          .from('orders')
-          .insert({
-            buyer_id: user.id,
-            seller_id: sellerId,
-            status: 'pending',
-            total_amount: orderTotal,
-            order_date: new Date().toISOString(),
-            delivery_address: deliveryAddress,
-            phone: phone,
-            payment_status: 'pending'
-          })
-          .select('*')
-          .single();
-
-        if (orderError) throw orderError;
-
-        // Prepare order items
-        const orderItems = sellerItems.map(item => ({
-          order_id: order.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: Number(item.product?.price || 0),
-        }));
-
-        // Add order items
-        const { error: itemsError } = await supabase
-          .from('order_items')
-          .insert(orderItems);
-
-        if (itemsError) throw itemsError;
-
-        // Notify seller
-        await supabase.from('messages').insert({
-          order_id: order.id,
-          sender_id: user.id,
-          receiver_id: sellerId,
-          message_text: `New order #${order.id} has been placed with ${sellerItems.length} item(s)`,
-          created_at: new Date().toISOString()
-        });
-
-        return order;
-      });
-
-      // Wait for all orders to be created
-      const orders = await Promise.all(orderPromises);
-      
-      if (orders.length === 0) {
-        throw new Error('No valid items to order');
-      }
-
-      // Clear the cart after successful order creation
-      await supabase
-        .from('cart_items')
-        .delete()
-        .eq('cart_id', cartId);
-
-      // Redirect to the first order's payment page
-      router.push(`/orders/${orders[0].id}/pay`);
-
-    } catch (e) {
-      console.error('Failed to proceed to payment', e);
-      alert(e.message || 'Failed to create order. Please try again.');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600" />
-      </div>
-    )
-  }
+  // ... rest of your component code (proceedToPayment, etc.) ...
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Your Cart</h1>
-          <button
-            onClick={() => router.push('/products')}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Go to Products
-          </button>
-        </div>
-        {errorMsg && (
-          <div className="mb-4 p-3 rounded bg-red-50 text-red-700 text-sm">
-            {errorMsg}
-          </div>
-        )}
-
-        {items.length === 0 ? (
-          <div className="bg-white p-8 rounded-lg shadow-sm text-center">
-            <p className="text-gray-600 mb-4">Your cart is empty.</p>
-            <button
-              onClick={() => router.push('/products')}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              Browse Products
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              {items.map(it => (
-                <div key={it.id} className="bg-white p-4 rounded-lg shadow-sm flex items-center gap-4">
-                  <div className="w-16 h-16 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
-                    {it.product?.images?.[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={it.product.images[0]} alt={it.product?.name || 'Product'} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-2xl">🥬</span>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{it.product?.name || 'Product'}</p>
-                    <p className="text-sm text-gray-500">{formatBDT(it.product?.price ?? 0)}/{it.product?.unit || 'unit'}</p>
-                    <div className="mt-2 flex items-center gap-4">
-                      <span className="text-sm text-gray-600">Quantity: {it.quantity}</span>
-                      <button
-                        onClick={() => removeItem(it.id)}
-                        className="text-red-600 hover:underline"
-                        disabled={updating}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-900">
-                      {formatBDT(((it.product?.price ?? 0) * (it.quantity || 0)))}
-                    </p>
-                  </div>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-6">Your Cart</h1>
+      
+      {loading ? (
+        <p>Loading cart...</p>
+      ) : errorMsg ? (
+        <p className="text-red-500">{errorMsg}</p>
+      ) : items.length === 0 ? (
+        <p>Your cart is empty</p>
+      ) : (
+        <div className="space-y-4">
+          {items.map(item => (
+            <div key={item.id} className="border p-4 rounded-lg flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                {item.products?.images?.[0] && (
+                  <img 
+                    src={item.products.images[0]} 
+                    alt={item.products.name}
+                    className="w-20 h-20 object-cover rounded"
+                  />
+                )}
+                <div>
+                  <h3 className="font-medium">{item.products?.name}</h3>
+                  <p>{formatBDT(item.products?.price || 0)} × {item.quantity}</p>
                 </div>
-              ))}
-            </div>
-            <div>
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
-                <div className="flex justify-between text-sm text-gray-600 mb-2">
-                  <span>Items</span>
-                  <span>{items.length}</span>
+              </div>
+              
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                    disabled={updating || item.quantity <= 1}
+                    className="px-2 py-1 border rounded"
+                  >
+                    -
+                  </button>
+                  <span>{item.quantity}</span>
+                  <button 
+                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                    disabled={updating}
+                    className="px-2 py-1 border rounded"
+                  >
+                    +
+                  </button>
                 </div>
-                <div className="flex justify-between text-base font-semibold text-gray-900 border-t pt-3 mt-3">
-                  <span>Total</span>
-                  <span>{formatBDT(total)}</span>
-                </div>
-                <button
-                  onClick={proceedToPayment}
-                  className="mt-6 w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                
+                <button 
+                  onClick={() => removeItem(item.id)}
+                  disabled={updating}
+                  className="text-red-500"
                 >
-                  Proceed to Payment
+                  Remove
                 </button>
               </div>
             </div>
+          ))}
+          
+          <div className="border-t pt-4 mt-6">
+            <div className="flex justify-between items-center">
+              <span className="font-bold">Total:</span>
+              <span className="text-xl font-bold">{formatBDT(total)}</span>
+            </div>
+            
+            <button
+              onClick={proceedToPayment}
+              disabled={updating || items.length === 0}
+              className="w-full mt-4 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {updating ? 'Processing...' : 'Proceed to Checkout'}
+            </button>
           </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   )
 }
