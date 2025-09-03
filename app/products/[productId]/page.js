@@ -235,10 +235,6 @@ export default function ProductDetail() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
               <p className="text-gray-600">{product.description}</p>
-              <div className="flex items-center text-sm text-gray-600 mt-2">
-                <span className="text-yellow-500 mr-1">⭐</span>
-                <span>{Number(sellerStore?.rating ?? 0).toFixed(1)}</span>
-              </div>
             </div>
 
             {/* Wishlist button under product title/description for signed-in buyers (not the seller) */}
@@ -314,8 +310,7 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            {/* Seller Information */
-            }
+            {/* Seller Information */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <div className="flex items-center space-x-4 mb-4">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
