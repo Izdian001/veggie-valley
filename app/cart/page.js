@@ -17,76 +17,155 @@ export default function CartPage() {
 
   // Get or create cart for the user
   const getOrCreateCart = async (userId) => {
-    // Check for existing cart
-    const { data: existingCart } = await supabase
-      .from('cart')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle()
+    try {
+      console.log('Checking for existing cart for user:', userId)
+      
+      // First, try to get existing cart
+      const { data: existingCart, error: fetchError } = await supabase
+        .from('cart')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle()
 
-    if (existingCart) {
-      return existingCart.id
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "No rows returned" which is expected
+        console.error('Error fetching cart:', fetchError)
+        throw new Error(`Failed to fetch cart: ${fetchError.message}`)
+      }
+
+      if (existingCart?.id) {
+        console.log('Found existing cart:', existingCart.id)
+        return existingCart.id
+      }
+
+      console.log('No existing cart found, creating new cart')
+      
+      // If no cart exists, create a new one
+      const { data: newCart, error: createError } = await supabase
+        .from('cart')
+        .insert({ user_id: userId })
+        .select('id')
+        .single()
+
+      if (createError || !newCart) {
+        const errorMsg = createError?.message || 'Failed to create cart: No data returned'
+        console.error('Error creating cart:', errorMsg)
+        throw new Error(`Failed to create cart: ${errorMsg}`)
+      }
+
+      console.log('Created new cart:', newCart.id)
+      return newCart.id
+      
+    } catch (error) {
+      console.error('Error in getOrCreateCart:', error)
+      throw new Error(`Cart operation failed: ${error.message}`)
     }
-
-    // Create new cart if none exists
-    const { data: newCart, error } = await supabase
-      .from('cart')
-      .insert({ user_id: userId })
-      .select('id')
-      .single()
-
-    if (error) throw error
-    return newCart.id
   }
 
   // Load cart items
   const loadCartItems = async (cartId) => {
-    const { data: cartItems, error } = await supabase
-      .from('cart_items')
-      .select(`
-        id,
-        product_id,
-        quantity,
-        products (
-          id,
-          name,
-          price,
-          images,
-          stock_quantity,
-          seller_id
-        )
-      `)
-      .eq('cart_id', cartId)
+    if (!cartId) {
+      console.error('No cart ID provided to loadCartItems')
+      throw new Error('Invalid cart ID')
+    }
 
-    if (error) throw error
-    return cartItems || []
+    try {
+      console.log('Loading cart items for cart:', cartId)
+      
+      const { data: cartItems, error, status, statusText } = await supabase
+        .from('cart_items')
+        .select(`
+          id,
+          product_id,
+          quantity,
+          products (
+            id,
+            name,
+            price,
+            images,
+            seller_id
+          )
+        `)
+        .eq('cart_id', cartId)
+
+      console.log('Cart items query status:', status, statusText)
+      
+      if (error) {
+        console.error('Error loading cart items:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw new Error(`Failed to load cart items: ${error.message}`)
+      }
+
+      if (!Array.isArray(cartItems)) {
+        console.error('Invalid cart items format:', cartItems)
+        return []
+      }
+
+      console.log(`Successfully loaded ${cartItems.length} cart items`)
+      return cartItems
+      
+    } catch (error) {
+      console.error('Error in loadCartItems:', {
+        message: error.message,
+        stack: error.stack
+      })
+      throw new Error(`Failed to load cart: ${error.message}`)
+    }
   }
 
   useEffect(() => {
     const init = async () => {
       try {
-        const { data: auth } = await supabase.auth.getUser()
-        const me = auth?.user || null
+        console.log('Initializing cart...')
         
+        // Check authentication
+        const { data: auth, error: authError } = await supabase.auth.getUser()
+        if (authError) {
+          console.error('Auth error:', authError)
+          throw new Error('Authentication failed')
+        }
+        
+        const me = auth?.user
         if (!me) {
+          console.log('No user found, redirecting to auth')
           router.push('/auth')
           return
         }
 
+        console.log('User authenticated:', me.id)
         setUser(me)
 
         // Get or create cart
+        console.log('Getting or creating cart...')
         const cartId = await getOrCreateCart(me.id)
+        console.log('Using cart ID:', cartId)
+        
+        if (!cartId) {
+          throw new Error('Failed to get or create cart')
+        }
+        
         setCartId(cartId)
 
         // Load cart items
+        console.log('Loading cart items...')
         const cartItems = await loadCartItems(cartId)
+        console.log('Loaded cart items:', cartItems)
+        
+        if (!Array.isArray(cartItems)) {
+          console.error('Invalid cart items data:', cartItems)
+          throw new Error('Invalid cart data received')
+        }
+        
         setItems(cartItems)
-
+        
       } catch (error) {
-        console.error('Error initializing cart:', error)
-        setErrorMsg('Failed to load cart')
+        console.error('Cart initialization error:', error)
+        setErrorMsg(error.message || 'Failed to load cart. Please try again.')
       } finally {
+        console.log('Cart initialization complete')
         setLoading(false)
       }
     }
@@ -151,7 +230,96 @@ export default function CartPage() {
     }, 0)
   }, [items])
 
-  // ... rest of your component code (proceedToPayment, etc.) ...
+  // Handle checkout with multiple sellers
+  const proceedToPayment = async () => {
+    if (items.length === 0) {
+      setErrorMsg('Your cart is empty')
+      return
+    }
+    
+    if (!user) {
+      setErrorMsg('Please sign in to proceed to checkout')
+      router.push('/auth')
+      return
+    }
+    
+    setUpdating(true)
+    setErrorMsg('')
+    
+    try {
+      // Group items by seller
+      const itemsBySeller = items.reduce((acc, item) => {
+        const sellerId = item.products?.seller_id;
+        if (!sellerId) {
+          console.warn('Item has no seller_id:', item);
+          return acc;
+        }
+        if (!acc[sellerId]) {
+          acc[sellerId] = [];
+        }
+        acc[sellerId].push(item);
+        return acc;
+      }, {});
+
+      // Create orders for each seller
+      const orders = await Promise.all(
+        Object.entries(itemsBySeller).map(async ([sellerId, sellerItems]) => {
+          // Calculate total for this seller's items
+          const sellerTotal = sellerItems.reduce((sum, item) => {
+            return sum + ((item.products?.price || 0) * item.quantity);
+          }, 0);
+
+          // Create order for this seller
+          const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .insert({
+              buyer_id: user.id,
+              seller_id: sellerId,
+              status: 'pending',
+              total_amount: sellerTotal,
+              created_at: new Date().toISOString()
+            })
+            .select('id')
+            .single();
+
+          if (orderError) throw orderError;
+
+          // Create order items for this seller
+          const orderItems = sellerItems.map(item => ({
+            order_id: order.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            unit_price: item.products?.price || 0,  // Add unit_price from product
+            created_at: new Date().toISOString()
+          }));
+
+          const { error: itemsError } = await supabase
+            .from('order_items')
+            .insert(orderItems);
+
+          if (itemsError) throw itemsError;
+
+          return order.id;
+        })
+      );
+
+      // Don't clear the cart after successful order
+      // Items will remain in the cart for future purchases
+
+      // Redirect to the first order's payment page
+      if (orders.length > 0) {
+        router.push(`/orders/${orders[0]}/pay`);
+      } else {
+        throw new Error('No orders were created');
+      }
+
+    } catch (error) {
+      console.error('Error during checkout:', error);
+      setErrorMsg(error.message || 'Failed to process your order. Please try again.');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   return (
     <div className="container mx-auto p-4">

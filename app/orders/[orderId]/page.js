@@ -49,23 +49,29 @@ export default function OrderDetailsPage({ params }) {
         sellerProfile = profilesData.find(p => p.id === orderRow.seller_id) || null
       }
 
-      // 3) Fetch product info
-      let productInfo = null
-      if (orderRow.product_id) {
-        const { data: prod, error: prodErr } = await supabase
-          .from('products')
-          .select('id, name, unit, price')
-          .eq('id', orderRow.product_id)
-          .single()
-        if (!prodErr) productInfo = prod
-      }
+      // 3) Fetch order items with product info
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select(`
+          *,
+          product:product_id (
+            id,
+            name,
+            unit,
+            price,
+            images
+          )
+        `)
+        .eq('order_id', orderId)
+
+      if (itemsError) throw itemsError
 
       // Compose order object with nested info
       const orderData = {
         ...orderRow,
         seller: sellerProfile,
         buyer: buyerProfile,
-        product: productInfo
+        items: orderItems || []
       }
 
       setOrder(orderData)
@@ -167,21 +173,47 @@ export default function OrderDetailsPage({ params }) {
         {/* Order Info */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Order #{order.id.substring(0, 8)}</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div><p><strong>Status:</strong> {order.status}</p></div>
-            <div><p><strong>Total:</strong> ${order.total_amount ?? (order.total_price ?? (order.product?.price ? (order.product.price * order.quantity).toFixed(2) : '—'))}</p></div>
-            <div><p><strong>Seller:</strong> {order.seller?.full_name || 'Not provided'}</p></div>
-            <div><p><strong>Buyer:</strong> {order.buyer?.full_name || 'Not provided'}</p></div>
-          </div>
-          <div className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-               <Link
-                 href={`/orders/${order.id}/chat`}
-                 className="w-full block px-4 py-2 text-center bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
-               >
-                 Message About This Order
-               </Link>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <h3 className="font-medium">Order Status</h3>
+              <p className="capitalize">{order.status}</p>
             </div>
+            <div>
+              <h3 className="font-medium">Order Date</h3>
+              <p>{new Date(order.order_date).toLocaleDateString()}</p>
+            </div>
+            <div>
+              <h3 className="font-medium">Total Amount</h3>
+              <p>${order.total_amount?.toFixed(2) || '0.00'}</p>
+            </div>
+          </div>
+
+          <h3 className="font-medium mb-2">Items</h3>
+          <div className="border rounded-lg divide-y">
+            {order.items?.map((item) => (
+              <div key={item.id} className="p-4 flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  {item.product?.images?.[0] && (
+                    <img
+                      src={item.product.images[0]}
+                      alt={item.product.name}
+                      className="w-16 h-16 object-cover rounded"
+                    />
+                  )}
+                  <div>
+                    <h4 className="font-medium">{item.product?.name || 'Product'}</h4>
+                    <p className="text-sm text-gray-600">
+                      {item.quantity} × ${item.unit_price?.toFixed(2) || '0.00'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">
+                    ${(item.quantity * item.unit_price)?.toFixed(2) || '0.00'}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
