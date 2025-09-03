@@ -112,6 +112,7 @@ export default function AddProductPage() {
           className="border p-2 w-full rounded"
         >
           <option value="kg">kg</option>
+          <option value="litre">litre</option>
           <option value="piece">piece</option>
           <option value="pack">pack</option>
         </select>
