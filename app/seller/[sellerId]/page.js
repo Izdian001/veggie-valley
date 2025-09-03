@@ -169,14 +169,23 @@ export default function SellerStore() {
                   <p className="text-sm text-gray-500">Years Farming</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-green-600">
-                    {Number((seller.seller_profiles?.rating ?? (ratingAvg ?? 0))).toFixed(1)} ⭐
+                  <div className="flex items-center justify-center space-x-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span 
+                        key={star} 
+                        className={`text-xl ${star <= Math.round(ratingAvg || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {Number(ratingAvg || 0).toFixed(1)} ({(ratingCount || 0)} reviews)
                   </p>
-                  <p className="text-sm text-gray-500">Rating</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-green-600">
-                    {(ratingCount ?? seller.seller_profiles?.total_reviews ?? 0)}
+                    {(ratingCount || seller.seller_profiles?.total_reviews || 0)}
                   </p>
                   <p className="text-sm text-gray-500">Reviews</p>
                 </div>
