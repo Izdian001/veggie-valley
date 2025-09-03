@@ -34,30 +34,7 @@ export default function ReviewForm({ order, onReviewSubmitted }) {
 
       if (insertError) throw insertError
 
-      // Update seller aggregate rating in seller_profiles
-      try {
-        const { data: store } = await supabase
-          .from('seller_profiles')
-          .select('rating, total_reviews')
-          .eq('id', order.seller_id)
-          .single()
-
-        const prevCount = store?.total_reviews || 0
-        const prevAvg = store?.rating || 0
-        const newCount = prevCount + 1
-        const newAvg = ((prevAvg * prevCount + rating) / newCount)
-
-        await supabase
-          .from('seller_profiles')
-          .upsert({
-            id: order.seller_id,
-            rating: parseFloat(newAvg.toFixed(2)),
-            total_reviews: newCount
-          }, { onConflict: 'id' })
-      } catch (aggErr) {
-        // Non-blocking: rating aggregation failure should not block review submission
-        console.warn('Failed to update seller aggregate rating', aggErr)
-      }
+      // Aggregates for seller_profiles are now handled by a DB trigger.
 
       // Reset form
       setRating(0)

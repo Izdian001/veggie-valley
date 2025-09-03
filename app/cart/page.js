@@ -88,7 +88,7 @@ export default function CartPage() {
       if (productIds.length > 0) {
         const { data: prods, error: prodErr } = await supabase
           .from('products')
-          .select('id, name, price, unit, images')
+          .select('id, name, price, unit, images, seller_id')
           .in('id', productIds)
         if (prodErr) throw prodErr
         productsMap = (prods || []).reduce((acc, p) => {
@@ -150,9 +150,56 @@ export default function CartPage() {
     }
   }
 
-  const proceedToPayment = () => {
-    // Placeholder: wire to checkout when implemented
-    alert('Proceeding to payment...')
+  const proceedToPayment = async () => {
+    try {
+      if (!user) {
+        router.push('/auth')
+        return
+      }
+      if (items.length === 0) {
+        alert('Your cart is empty.')
+        return
+      }
+      const first = items[0]
+      const product = first.product
+      if (!product?.seller_id) {
+        alert('Unable to determine seller for this product.')
+        return
+      }
+
+      // Create a minimal order for demo
+      const payload = {
+        buyer_id: user.id,
+        seller_id: product.seller_id,
+        product_id: product.id,
+        quantity: first.quantity || 1,
+        unit_price: Number(product.price || 0),
+        total_amount: Number(product.price || 0) * Number(first.quantity || 1),
+        status: 'pending'
+      }
+
+      const { data: order, error } = await supabase
+        .from('orders')
+        .insert(payload)
+        .select('*')
+        .single()
+      if (error) throw error
+
+      // Notify seller that a new order has been placed (demo notification)
+      await supabase
+        .from('messages')
+        .insert({
+          order_id: order.id,
+          sender_id: user.id,
+          receiver_id: product.seller_id,
+          message_text: `New order created (demo): ${product.name} x ${first.quantity}`
+        })
+
+      router.push(`/orders/${order.id}/pay`)
+    } catch (e) {
+      console.error('Failed to proceed to payment', e)
+      alert(e?.message || 'Failed to proceed to payment')
+    }
   }
 
   if (loading) {

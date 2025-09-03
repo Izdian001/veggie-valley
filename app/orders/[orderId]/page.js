@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import ReviewForm from '@/components/reviews/ReviewForm'
 import ReviewList from '@/components/reviews/ReviewList'
+import Link from 'next/link'
 
 export default function OrderDetailsPage({ params }) {
   const router = useRouter()
@@ -168,17 +169,19 @@ export default function OrderDetailsPage({ params }) {
           <h2 className="text-xl font-semibold mb-4">Order #{order.id.substring(0, 8)}</h2>
           <div className="grid grid-cols-2 gap-4">
             <div><p><strong>Status:</strong> {order.status}</p></div>
-            <div><p><strong>Total:</strong> ${order.total_price || (order.product?.price ? (order.product.price * order.quantity).toFixed(2) : '—')}</p></div>
+            <div><p><strong>Total:</strong> ${order.total_amount ?? (order.total_price ?? (order.product?.price ? (order.product.price * order.quantity).toFixed(2) : '—'))}</p></div>
             <div><p><strong>Seller:</strong> {order.seller?.full_name || 'Not provided'}</p></div>
             <div><p><strong>Buyer:</strong> {order.buyer?.full_name || 'Not provided'}</p></div>
           </div>
           <div className="mt-6">
-            <button
-              onClick={() => router.push(`/orders/${order.id}/chat`)}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
-            >
-              Message About This Order
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+               <Link
+                 href={`/orders/${order.id}/chat`}
+                 className="w-full block px-4 py-2 text-center bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+               >
+                 Message About This Order
+               </Link>
+            </div>
           </div>
         </div>
 
