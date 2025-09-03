@@ -79,28 +79,38 @@ export default function ManageSellers() {
 
     setDeleting(true)
     try {
-      const { error } = await supabase
-        .from('seller_profiles')
-        .delete()
-        .eq('id', selectedSeller.seller_profile_id)
+      // Get the current session token
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Not authenticated')
+      }
 
-      if (error) throw error
+      // Call the API endpoint to delete the user
+      const response = await fetch('/api/admin/delete-seller', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ sellerId: selectedSeller.id }),
+      })
 
-      await supabase
-        .from('admin_actions')
-        .insert({
-          admin_id: (await supabase.auth.getUser()).data.user.id,
-          action_type: 'delete_seller',
-          target_id: selectedSeller.id,
-          target_type: 'seller',
-          action_details: { action: 'deleted', reason: 'Admin decision' }
-        })
+      const result = await response.json()
 
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete seller')
+      }
+
+      // Remove the seller from the local state
+      setSellers(sellers.filter(seller => seller.id !== selectedSeller.id))
       setShowDeleteModal(false)
       setSelectedSeller(null)
-      loadSellers()
+      
+      // Show success message
+      alert('Seller deleted successfully')
     } catch (error) {
       console.error('Error deleting seller:', error)
+      alert(`Error: ${error.message}`)
     } finally {
       setDeleting(false)
     }
