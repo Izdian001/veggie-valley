@@ -20,7 +20,7 @@ export default function SellerDashboard() {
     checkUser()
   }, [])
 
-  // No longer redirecting to profile setup - users can edit profile later
+
 
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -30,7 +30,7 @@ export default function SellerDashboard() {
     }
 
   const fetchSellerReviews = async (sellerId) => {
-    // Fetch reviews for this seller
+    
     const { data, error } = await supabase
       .from('reviews')
       .select(`
@@ -43,13 +43,12 @@ export default function SellerDashboard() {
     if (!error) {
       const normalized = (data || []).map(r => ({ ...r, buyer_name: r.buyer_name?.full_name }))
       setReviews(normalized)
-      // Compute aggregates client-side as fallback
+      
       const cnt = normalized.length
       const avg = cnt ? normalized.reduce((s, r) => s + (r.rating || 0), 0) / cnt : 0
       setReviewCount(cnt)
       setRatingAvg(Number(avg.toFixed(2)))
 
-      // Persist aggregates so buyers can read from seller_profiles without needing reviews access
       try {
         await supabase
           .from('seller_profiles')
@@ -79,13 +78,11 @@ export default function SellerDashboard() {
     setProfile(sellerProfile)
     setLoading(false)
 
-    // Load initial pending orders count
+
     fetchPendingCount(user.id)
 
-    // Load seller reviews/aggregates
     fetchSellerReviews(user.id)
 
-    // Realtime updates for orders belonging to this seller
     const channel = supabase
       .channel(`orders-seller-${user.id}`)
       .on(

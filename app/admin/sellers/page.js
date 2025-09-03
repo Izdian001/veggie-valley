@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import Link from 'next/link'
 
 export default function ManageSellers() {
   const router = useRouter()
@@ -27,132 +28,49 @@ export default function ManageSellers() {
 
   const loadSellers = async () => {
     try {
-      // First get all profiles that have seller_profiles
-      const { data: profiles, error: profilesError } = await supabase
+      setLoading(true)
+      
+      // First, get all users with role 'seller'
+      const { data: sellerUsers, error: usersError } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          full_name,
-          email,
-          phone,
-          address,
-          created_at,
-          updated_at,
-          seller_profiles (
-            id,
-            farm_name,
-            bio,
-            years_farming,
-            certifications,
-            cover_image_url,
-            rating,
-            total_reviews,
-            is_approved,
-            approved_by,
-            approved_at,
-            created_at,
-            updated_at
-          )
-        `)
-        .not('seller_profiles', 'is', null)
-        .order('created_at', { ascending: false })
+        .select('*')
+        .eq('role', 'seller')
+
+      if (usersError) throw usersError
+
+      // Then get all seller profiles
+      const { data: sellerProfiles, error: profilesError } = await supabase
+        .from('seller_profiles')
+        .select('*')
 
       if (profilesError) throw profilesError
 
-      // Transform the data to match the expected format
-      const sellersWithStats = profiles.map(profile => {
-        const sellerProfile = profile.seller_profiles?.[0] || {}
-        
+      // Combine the data
+      const formattedSellers = sellerUsers.map(user => {
+        const profile = sellerProfiles.find(p => p.id === user.id) || {}
         return {
-          id: sellerProfile.id,
-          profiles: {
-            id: profile.id,
-            full_name: profile.full_name,
-            email: profile.email,
-            phone: profile.phone,
-            address: profile.address
-          },
-          farm_name: sellerProfile.farm_name,
-          bio: sellerProfile.bio,
-          years_farming: sellerProfile.years_farming,
-          certifications: sellerProfile.certifications,
-          cover_image_url: sellerProfile.cover_image_url,
-          rating: sellerProfile.rating || 0,
-          total_reviews: sellerProfile.total_reviews || 0,
-          is_approved: sellerProfile.is_approved || false,
-          approved_by: sellerProfile.approved_by,
-          approved_at: sellerProfile.approved_at,
-          created_at: sellerProfile.created_at,
-          updated_at: sellerProfile.updated_at,
-          avgRating: sellerProfile.rating || 0,
-          totalReviews: sellerProfile.total_reviews || 0,
-          flaggedReviews: 0 // We'll add this later if needed
+          id: user.id,
+          seller_profile_id: profile.id || user.id,
+          full_name: user.full_name || 'Unknown',
+          email: user.email || 'No email',
+          phone: user.phone || 'No phone',
+          address: user.address || 'No address',
+          farm_name: profile.farm_name || 'No farm name',
+          bio: profile.bio || '',
+          rating: profile.rating || 0,
+          total_reviews: profile.total_reviews || 0,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+          cover_image_url: profile.cover_image_url || null
         }
       })
 
-      setSellers(sellersWithStats)
-      setLoading(false)
+      console.log('Formatted sellers:', formattedSellers) // For debugging
+      setSellers(formattedSellers)
     } catch (error) {
       console.error('Error loading sellers:', error)
+    } finally {
       setLoading(false)
-    }
-  }
-
-  const handleApproveSeller = async (sellerId) => {
-    try {
-      const { error } = await supabase
-        .from('seller_profiles')
-        .update({ 
-          is_approved: true, 
-          approval_date: new Date().toISOString() 
-        })
-        .eq('id', sellerId)
-
-      if (error) throw error
-
-      // Log admin action
-      await supabase
-        .from('admin_actions')
-        .insert({
-          admin_id: (await supabase.auth.getUser()).data.user.id,
-          action_type: 'approve_seller',
-          target_id: sellerId,
-          target_type: 'seller',
-          action_details: { action: 'approved' }
-        })
-
-      loadSellers() // Refresh the list
-    } catch (error) {
-      console.error('Error approving seller:', error)
-    }
-  }
-
-  const handleRejectSeller = async (sellerId, reason) => {
-    try {
-      const { error } = await supabase
-        .from('seller_profiles')
-        .update({ 
-          is_approved: false, 
-          admin_notes: reason 
-        })
-        .eq('id', sellerId)
-
-      if (error) throw error
-
-      // Log admin action
-      await supabase
-        .from('admin_actions')
-        .insert({
-          admin_id: (await supabase.auth.getUser()).data.user.id,
-          action_type: 'reject_seller',
-          target_id: sellerId,
-          target_type: 'seller',
-          action_details: { action: 'rejected', reason }
-        })
-
-      loadSellers() // Refresh the list
-    } catch (error) {
-      console.error('Error rejecting seller:', error)
     }
   }
 
@@ -161,15 +79,13 @@ export default function ManageSellers() {
 
     setDeleting(true)
     try {
-      // Delete seller profile (this will cascade to related data)
       const { error } = await supabase
         .from('seller_profiles')
         .delete()
-        .eq('id', selectedSeller.id)
+        .eq('id', selectedSeller.seller_profile_id)
 
       if (error) throw error
 
-      // Log admin action
       await supabase
         .from('admin_actions')
         .insert({
@@ -182,7 +98,7 @@ export default function ManageSellers() {
 
       setShowDeleteModal(false)
       setSelectedSeller(null)
-      loadSellers() // Refresh the list
+      loadSellers()
     } catch (error) {
       console.error('Error deleting seller:', error)
     } finally {
@@ -196,9 +112,80 @@ export default function ManageSellers() {
     return 'text-red-600'
   }
 
-  const getStatusColor = (isApproved) => {
-    return isApproved ? 'text-green-600' : 'text-red-600'
-  }
+  const columns = [
+    { 
+      key: 'seller_info', 
+      header: 'Seller',
+      render: (seller) => (
+        <div className="flex items-center">
+          {seller.cover_image_url ? (
+            <img 
+              src={seller.cover_image_url} 
+              alt={seller.farm_name}
+              className="w-10 h-10 rounded-full object-cover mr-3"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mr-3">
+              <span className="text-gray-500 text-lg">
+                {seller.full_name?.charAt(0) || '?'}
+              </span>
+            </div>
+          )}
+          <div>
+            <div className="font-medium text-gray-900">{seller.full_name}</div>
+            <div className="text-sm text-gray-500">{seller.farm_name}</div>
+          </div>
+        </div>
+      )
+    },
+    { 
+      key: 'contact', 
+      header: 'Contact',
+      render: (seller) => (
+        <div className="space-y-1">
+          <div className="text-sm text-gray-900">{seller.email}</div>
+          {seller.phone && (
+            <div className="text-sm text-gray-500">{seller.phone}</div>
+          )}
+          {seller.address && (
+            <div className="text-xs text-gray-500 truncate max-w-xs">{seller.address}</div>
+          )}
+        </div>
+      )
+    },
+    { 
+      key: 'stats', 
+      header: 'Stats',
+      render: (seller) => (
+        <div className="space-y-1">
+          <div className="flex items-center">
+            <span className="text-yellow-500">★</span>
+            <span className="ml-1 text-sm">
+              {seller.rating ? `${seller.rating.toFixed(1)} (${seller.total_reviews})` : 'No ratings'}
+            </span>
+          </div>
+          <div className="text-xs text-gray-500">
+            Joined: {new Date(seller.created_at).toLocaleDateString()}
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (seller) => (
+        <div className="flex space-x-2">
+          <Link
+            href={`/admin/sellers/${seller.id}`}
+            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+            title="View Seller Details"
+          >
+            View
+          </Link>
+        </div>
+      )
+    }
+  ]
 
   if (loading) {
     return (
@@ -236,30 +223,6 @@ export default function ManageSellers() {
               <div className="text-sm text-gray-600">Total Sellers</div>
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                {sellers.filter(s => s.is_approved).length}
-              </div>
-              <div className="text-sm text-gray-600">Approved</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">
-                {sellers.filter(s => !s.is_approved).length}
-              </div>
-              <div className="text-sm text-gray-600">Pending</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">
-                {sellers.filter(s => s.flaggedReviews > 0).length}
-              </div>
-              <div className="text-sm text-gray-600">Flagged</div>
-            </div>
-          </div>
         </div>
 
         {/* Sellers List */}
@@ -267,104 +230,33 @@ export default function ManageSellers() {
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Seller Profiles</h2>
           </div>
-          <div className="divide-y divide-gray-200">
-            {sellers.map((seller) => (
-              <div key={seller.id} className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                          <span className="text-lg font-semibold text-green-600">
-                            {seller.profiles?.full_name?.charAt(0) || 'S'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {seller.profiles?.full_name || 'Unknown'}
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          {seller.profiles?.email || 'No email'}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Farm: {seller.farm_name || 'No farm name'}
-                        </p>
-                        <div className="flex items-center space-x-4 mt-2">
-                          <span className={`text-sm font-medium ${getStatusColor(seller.is_approved)}`}>
-                            {seller.is_approved ? 'Approved' : 'Pending Approval'}
-                          </span>
-                          <span className="text-sm text-gray-600">
-                            Rating: <span className={getRatingColor(seller.avgRating)}>{seller.avgRating}/5</span> ({seller.totalReviews} reviews)
-                          </span>
-                          {seller.flaggedReviews > 0 && (
-                            <span className="text-sm text-red-600">
-                              ⚠️ {seller.flaggedReviews} flagged reviews
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {!seller.is_approved ? (
-                      <>
-                        <button
-                          onClick={() => handleApproveSeller(seller.id)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleRejectSeller(seller.id, 'Admin decision')}
-                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all"
-                        >
-                          Reject
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setSelectedSeller(seller)
-                          setShowDeleteModal(true)
-                        }}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Reviews Section */}
-                {seller.seller_reviews && seller.seller_reviews.length > 0 && (
-                  <div className="mt-4 pl-16">
-                    <h4 className="text-sm font-medium text-gray-900 mb-2">Recent Reviews:</h4>
-                    <div className="space-y-2">
-                      {seller.seller_reviews.slice(0, 3).map((review) => (
-                        <div key={review.id} className="bg-gray-50 rounded-lg p-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-sm text-gray-600">
-                                {review.rating} ⭐
-                              </span>
-                              <span className="text-sm text-gray-900">
-                                {review.review_text}
-                              </span>
-                            </div>
-                            {review.is_flagged && (
-                              <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
-                                Flagged: {review.flag_reason}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  {columns.map((column) => (
+                    <th
+                      key={column.key}
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      {column.header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {sellers.map((seller) => (
+                  <tr key={seller.id} className="hover:bg-gray-50">
+                    {columns.map((column) => (
+                      <td key={`${seller.id}-${column.key}`} className="px-6 py-4 whitespace-nowrap">
+                        {column.render ? column.render(seller) : seller[column.key]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -382,7 +274,7 @@ export default function ManageSellers() {
               <h3 className="text-lg font-medium text-gray-900 mt-4">Delete Seller</h3>
               <div className="mt-2 px-7">
                 <p className="text-sm text-gray-500">
-                  Are you sure you want to delete {selectedSeller?.profiles?.full_name}? This action cannot be undone.
+                  Are you sure you want to delete {selectedSeller?.full_name}? This action cannot be undone.
                 </p>
               </div>
               <div className="flex items-center justify-center space-x-4 mt-6">
