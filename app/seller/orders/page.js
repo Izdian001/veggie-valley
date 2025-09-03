@@ -1,300 +1,355 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
-import { formatBDT } from '@/lib/currency'
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { formatBDT } from '@/lib/currency';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function SellerOrders() {
-  const router = useRouter()
-  const [user, setUser] = useState(null)
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [savingId, setSavingId] = useState(null)
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [activeStatus, setActiveStatus] = useState('all');
+  const [loadingStates, setLoadingStates] = useState({});
+  const router = useRouter();
 
   useEffect(() => {
-    checkUser()
-  }, [])
+    const fetchUserAndOrders = async () => {
+      try {
+        // Get current user
+        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+        
+        if (userError) throw userError;
+        if (!currentUser) {
+          router.push('/auth');
+          return;
+        }
+        
+        setUser(currentUser);
 
-  useEffect(() => {
-    if (user) {
-      loadOrders()
-    }
-  }, [user])
+        // Get seller profile - first let's see what columns exist
+        console.log('Fetching seller profile for user ID:', currentUser.id);
+        
+        // First, let's get a list of all columns in seller_profiles
+        const { data: columns, error: columnsError } = await supabase
+          .from('information_schema.columns')
+          .select('column_name')
+          .eq('table_name', 'seller_profiles');
+          
+        console.log('Available columns in seller_profiles:', columns);
+        
+        // Now try to fetch the seller profile with the most likely column names
+        let sellerProfile;
+        let profileError;
+        
+        // Try with common column names
+        const possibleColumns = ['id', 'user_id', 'userid', 'uid', 'user_uid'];
+        
+        for (const column of possibleColumns) {
+          console.log(`Trying to fetch with column: ${column}`);
+          const { data, error } = await supabase
+            .from('seller_profiles')
+            .select('*')
+            .eq(column, currentUser.id)
+            .single();
+            
+          if (!error && data) {
+            sellerProfile = data;
+            console.log(`Found seller profile using column: ${column}`, sellerProfile);
+            break;
+          } else {
+            console.log(`No match with column: ${column}`, error);
+          }
+        }
+        
+        if (!sellerProfile) {
+          // If we still don't have a profile, try to get all profiles to see the structure
+          console.log('Could not find profile with direct lookup, fetching all profiles to check structure...');
+          const { data: allProfiles, error: allProfilesError } = await supabase
+            .from('seller_profiles')
+            .select('*')
+            .limit(5);
+            
+          if (!allProfilesError && allProfiles && allProfiles.length > 0) {
+            console.log('First few seller profiles:', allProfiles);
+            
+            // Try to find a profile that might match the current user
+            const matchingProfile = allProfiles.find(profile => 
+              profile.id === currentUser.id || 
+              profile.user_id === currentUser.id ||
+              profile.userid === currentUser.id
+            );
+            
+            if (matchingProfile) {
+              sellerProfile = matchingProfile;
+              console.log('Found matching profile in full table scan:', matchingProfile);
+            }
+          }
+        }
+        
+        if (!sellerProfile) {
+          console.error('No seller profile found for user after all attempts:', currentUser.id);
+          alert('No seller profile found. Please complete your seller profile first.');
+          router.push('/seller/profile');
+          return;
+        }
 
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user || user.user_metadata?.role !== 'seller') {
-      router.push('/auth')
-      return
-    }
-    setUser(user)
-  }
+        // Build the orders query
+        let query = supabase
+          .from('orders')
+          .select(`
+            *,
+            order_items(
+              *,
+              product:products(*)
+            ),
+            buyer:profiles!buyer_id(id, full_name, phone, email)
+          `)
+          .eq('seller_id', sellerProfile.id)
+          .order('created_at', { ascending: false });
 
-  const loadOrders = async () => {
+        // Apply status filter if not 'all'
+        if (activeStatus !== 'all') {
+          query = query.eq('status', activeStatus);
+        }
+
+        const { data: ordersData, error: ordersError } = await query;
+        if (ordersError) throw ordersError;
+
+        setOrders(ordersData || []);
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to load orders: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserAndOrders();
+  }, [activeStatus, router]);
+
+  // Get count of orders for each status
+  const getStatusCount = (status) => {
+    if (status === 'all') return orders.length;
+    return orders.filter(order => order.status === status).length;
+  };
+
+  // Status tabs configuration
+  const statusTabs = [
+    { id: 'all', label: 'All', count: getStatusCount('all') },
+    { id: 'pending', label: 'Pending', count: getStatusCount('pending') },
+    { id: 'confirmed', label: 'Confirmed', count: getStatusCount('confirmed') },
+    { id: 'shipped', label: 'Shipped', count: getStatusCount('shipped') },
+    { id: 'delivered', label: 'Delivered', count: getStatusCount('delivered') },
+  ];
+
+  // Status options for dropdown
+  const statusOptions = [
+    { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
+    { value: 'confirmed', label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
+    { value: 'shipped', label: 'Shipped', color: 'bg-purple-100 text-purple-800' },
+    { value: 'delivered', label: 'Delivered', color: 'bg-green-100 text-green-800' },
+    { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
+  ];
+
+  // Update order status
+  const updateOrderStatus = async (orderId, newStatus) => {
+    setLoadingStates(prev => ({ ...prev, [orderId]: true }));
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('orders')
-        .select(`
-          *,
-          products (
-            id,
-            name,
-            unit
-          ),
-          profiles!orders_buyer_id_fkey (
-            id,
-            full_name,
-            phone,
-            address,
-            city,
-            state
-          )
-        `)
-        .eq('seller_id', user?.id)
-        .order('order_date', { ascending: false })
+        .update({ status: newStatus })
+        .eq('id', orderId);
 
-      if (error) throw error
-      setOrders(data || [])
-      setLoading(false)
+      if (error) throw error;
+
+      // Update local state
+      setOrders(prev =>
+        prev.map(order =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        )
+      );
     } catch (error) {
-      console.error('Error loading orders:', error)
-      setLoading(false)
-    }
-  }
-
-  const updateOrderStatus = async (orderId, status) => {
-    // Optimistic UI update
-    const previous = orders
-    setSavingId(orderId)
-    setOrders((curr) => curr.map(o => o.id === orderId ? { ...o, status } : o))
-
-    try {
-      const { data: updated, error } = await supabase
-        .from('orders')
-        .update({ status })
-        .eq('id', orderId)
-        .select()
-
-      if (error) throw error
-      console.log('Order status updated:', updated)
-      // Keep optimistic state; no reload to avoid race/flicker
-    } catch (error) {
-      console.error('Error updating order status:', error)
-      alert(`Failed to update status: ${error?.message || 'Unknown error'}`)
-      // rollback
-      setOrders(previous)
+      console.error('Error updating order status:', error);
+      alert('Failed to update order status');
     } finally {
-      setSavingId(null)
+      setLoadingStates(prev => ({ ...prev, [orderId]: false }));
     }
-  }
-
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      pending: { color: 'bg-yellow-100 text-yellow-800', text: 'Pending' },
-      confirmed: { color: 'bg-blue-100 text-blue-800', text: 'Confirmed' },
-      shipped: { color: 'bg-purple-100 text-purple-800', text: 'Shipped' },
-      delivered: { color: 'bg-green-100 text-green-800', text: 'Delivered' },
-      cancelled: { color: 'bg-red-100 text-red-800', text: 'Cancelled' }
-    }
-    
-    const config = statusConfig[status] || statusConfig.pending
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.color}`}>
-        {config.text}
-      </span>
-    )
-  }
-
-  const getStatusOptions = (currentStatus) => {
-    const allStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
-    return allStatuses.filter(status => status !== currentStatus)
-  }
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg font-medium">Loading orders...</div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <button
-                onClick={() => router.push('/seller/dashboard')}
-                className="mr-4 p-2 text-gray-600 hover:text-gray-900"
-              >
-                ← Back to Dashboard
-              </button>
-              <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-            </div>
-          </div>
+    <div className="container px-4 py-8 mx-auto">
+      <div className="flex flex-col justify-between mb-8 md:items-center md:flex-row">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Order List</h1>
+          <p className="mt-1 text-sm text-gray-500">Manage and track your orders here</p>
         </div>
-      </header>
+        <Link 
+          href="/seller/dashboard"
+          className="px-4 py-2 mt-4 text-sm font-medium text-white bg-green-600 rounded-md md:mt-0 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+        >
+          Back to Dashboard
+        </Link>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{orders.length}</div>
-              <div className="text-sm text-gray-600">Total Orders</div>
-            </div>
+      {/* Status Tabs */}
+      <div className="flex mb-6 overflow-x-auto border-b border-gray-200">
+        {statusTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveStatus(tab.id)}
+            className={`px-4 py-2 text-sm font-medium whitespace-nowrap ${
+              activeStatus === tab.id
+                ? 'border-b-2 border-green-500 text-green-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label} ({tab.count})
+          </button>
+        ))}
+      </div>
+
+      {/* Search and Filter */}
+      <div className="flex flex-col mb-6 space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
+        <div className="relative flex-1">
+          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">
-                {orders.filter(o => o.status === 'pending').length}
-              </div>
-              <div className="text-sm text-gray-600">Pending</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
-                {orders.filter(o => o.status === 'confirmed').length}
-              </div>
-              <div className="text-sm text-gray-600">Confirmed</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">
-                {orders.filter(o => o.status === 'shipped').length}
-              </div>
-              <div className="text-sm text-gray-600">Shipped</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                {orders.filter(o => o.status === 'delivered').length}
-              </div>
-              <div className="text-sm text-gray-600">Delivered</div>
-            </div>
-          </div>
+          <input
+            type="text"
+            placeholder="Search orders..."
+            className="w-full py-2 pl-10 pr-4 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+          />
         </div>
+        <select className="px-4 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500">
+          <option>All Time</option>
+          <option>Today</option>
+          <option>Last 7 days</option>
+          <option>This Month</option>
+          <option>Last Month</option>
+        </select>
+      </div>
 
-        {/* Orders List */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Customer Orders</h2>
+      {/* Orders List */}
+      <div className="space-y-4">
+        {orders.length === 0 ? (
+          <div className="p-8 text-center bg-white rounded-lg shadow">
+            <p className="text-gray-500">No orders found</p>
           </div>
-          <div className="divide-y divide-gray-200">
-            {orders.length === 0 ? (
-              <div className="p-6 text-center">
-                <div className="text-gray-500 mb-4">No orders found</div>
-                <p className="text-sm text-gray-400">Orders from customers will appear here</p>
-              </div>
-            ) : (
-              orders.map((order) => (
-                <div key={order.id} className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-lg font-semibold text-blue-600">
-                            {order.profiles?.full_name?.charAt(0) || 'C'}
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {order.profiles?.full_name || 'Customer'}
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          Order #{order.id.slice(0, 8).toUpperCase()}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(order.order_date).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      {getStatusBadge(order.status)}
-                      <select
-                        value={order.status}
-                        onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                        disabled={savingId === order.id}
-                        className={`px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${savingId === order.id ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      >
-                        <option value={order.status}>{order.status.charAt(0).toUpperCase() + order.status.slice(1)}</option>
-                        {getStatusOptions(order.status).map(status => (
-                          <option key={status} value={status}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => router.push(`/orders/${order.id}`)}
-                        className="px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
-                      >View Details</button>
-                      <button
-                        onClick={() => router.push(`/orders/${order.id}/chat`)}
-                        className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-                      >Open Chat</button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Order Details */}
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="font-medium text-gray-900 mb-3">Order Details</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Product:</span>
-                          <span className="font-medium">{order.products?.name || 'Unknown Product'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Quantity:</span>
-                          <span className="font-medium">{order.quantity} {order.products?.unit || 'units'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Unit Price:</span>
-                          <span className="font-medium">{formatBDT(order.unit_price)}</span>
-                        </div>
-                        <div className="flex justify-between border-t pt-2">
-                          <span className="text-gray-900 font-medium">Total Amount:</span>
-                          <span className="text-green-600 font-bold">{formatBDT(order.total_amount)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Customer Information */}
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="font-medium text-gray-900 mb-3">Customer Information</h4>
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="text-gray-600">Name:</span>
-                          <span className="ml-2 font-medium">{order.profiles?.full_name || 'Not provided'}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Phone:</span>
-                          <span className="ml-2 font-medium">{order.profiles?.phone || 'Not provided'}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Address:</span>
-                          <span className="ml-2 font-medium">
-                            {order.profiles?.address || 'Not provided'}
-                            {order.profiles?.city && `, ${order.profiles.city}`}
-                            {order.profiles?.state && `, ${order.profiles.state}`}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+        ) : (
+          orders.map((order) => (
+            <div key={order.id} className="p-4 bg-white rounded-lg shadow">
+              <div className="flex flex-col justify-between md:items-center md:flex-row">
+                <div className="mb-2 md:mb-0">
+                  <p className="font-medium text-gray-900">Order #{order.id.split('-')[0]}</p>
+                  <p className="text-sm text-gray-500">
+                    {new Date(order.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </p>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+                <div className="flex items-center space-x-4">
+                  <div className="relative">
+                    <select
+                      value={order.status}
+                      onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                      disabled={loadingStates[order.id]}
+                      className={`px-3 py-1 text-xs font-medium rounded-full appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 ${
+                        statusOptions.find(s => s.value === order.status)?.color || 'bg-gray-100'
+                      }`}
+                    >
+                      {statusOptions.map((option) => (
+                        <option 
+                          key={option.value} 
+                          value={option.value}
+                          className="bg-white text-gray-900"
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                      <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                    {loadingStates[order.id] && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-50 rounded-full">
+                        <div className="w-4 h-4 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
+                      </div>
+                    )}
+                  </div>
+                  <span className="font-medium">{formatBDT(order.total_amount)}</span>
+                </div>
+              </div>
+              
+              {/* Order Items */}
+              <div className="mt-4 space-y-2">
+                {order.order_items?.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between py-2 border-t border-gray-100">
+                    <div className="flex items-center space-x-3">
+                      {item.product?.images?.[0] ? (
+                        <img
+                          src={item.product.images[0]}
+                          alt={item.product.name}
+                          className="object-cover w-10 h-10 rounded"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded">
+                          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {item.product?.name || 'Product not found'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {item.quantity} × {formatBDT(item.unit_price)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {formatBDT(item.quantity * item.unit_price)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Customer Info */}
+              <div className="pt-3 mt-3 border-t border-gray-100">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">Customer:</span> {order.buyer?.full_name || 'Guest'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">Phone:</span> {order.phone || order.buyer?.phone || 'N/A'}
+                  </p>
+                  {order.delivery_address && (
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Address:</span> {order.delivery_address}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
-  )
+  );
 }
